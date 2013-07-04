@@ -23,7 +23,7 @@
 #include "RooStats/HistFactory/HistFactoryException.h"
 #include "RooStats/HistFactory/Measurement.h"
 
-#include "Helper.h"
+#include "RooStats/HistFactory/Helper.h"
 
 
 using namespace RooStats;
