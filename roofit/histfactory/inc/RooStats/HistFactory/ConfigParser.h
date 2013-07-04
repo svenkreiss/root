@@ -33,6 +33,8 @@ namespace RooStats{
 
      public:
 
+       virtual ~ConfigParser() {}
+
        // The "main" method
        virtual std::vector< RooStats::HistFactory::Measurement > GetMeasurementsFromXML(std::string input); 
        virtual RooStats::HistFactory::Measurement CreateMeasurementFromDriverNode( TXMLNode* node );
