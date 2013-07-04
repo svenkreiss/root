@@ -34,9 +34,9 @@ namespace RooStats{
      public:
 
        // The "main" method
-       std::vector< RooStats::HistFactory::Measurement > GetMeasurementsFromXML(std::string input); 
-       RooStats::HistFactory::Measurement CreateMeasurementFromDriverNode( TXMLNode* node );
-       RooStats::HistFactory::Channel ParseChannelXMLFile( std::string filen );
+       virtual std::vector< RooStats::HistFactory::Measurement > GetMeasurementsFromXML(std::string input); 
+       virtual RooStats::HistFactory::Measurement CreateMeasurementFromDriverNode( TXMLNode* node );
+       virtual RooStats::HistFactory::Channel ParseChannelXMLFile( std::string filen );
 
        // Helpers used to process a channel
        HistFactory::Data CreateDataElement( TXMLNode* node );
