@@ -108,6 +108,12 @@ public:
   std::map< std::string, double >& GetNoSyst() { return fNoSyst; }
 
 
+protected:
+
+  // Channels that make up this measurement
+  std::vector< RooStats::HistFactory::Channel > fChannels;
+
+
 private:
 
   // Configurables of this measurement
@@ -119,9 +125,6 @@ private:
   int fBinHigh;
   bool fExportOnly;
   std::string fInterpolationScheme;
-
-  // Channels that make up this measurement
-  std::vector< RooStats::HistFactory::Channel > fChannels;
 
   // List of Parameters to be set constant
   std::vector< std::string > fConstantParams;
