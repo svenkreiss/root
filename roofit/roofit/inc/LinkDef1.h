@@ -2,6 +2,8 @@
 #pragma link off all globals;
 #pragma link off all classes;
 #pragma link off all functions;
+#pragma link C++ class AsymmBreitWigner ;
+#pragma link C++ class PearsonTypeIV ;
 #pragma link C++ class Roo2DKeysPdf+ ;
 #pragma link C++ class RooArgusBG+ ;
 #pragma link C++ class RooBCPEffDecay+ ;
@@ -24,6 +26,7 @@
 #pragma link C++ class RooGExpModel+ ;
 #pragma link C++ class RooHistConstraint+ ;
 #pragma link C++ class RooKeysPdf+ ;
+#pragma link C++ class RooParamKeysPdf+ ;
 #pragma link C++ class RooNDKeysPdf+ ;
 #pragma link C++ class RooLandau+ ;
 #pragma link C++ class RooNonCPEigenDecay+ ;
@@ -44,6 +47,7 @@
 #pragma link C++ class RooChiSquarePdf+ ;
 #pragma link C++ class RooIntegralMorph+ ;
 #pragma link C++ class RooMomentMorph+ ;
+#pragma link C++ class RooStarMomentMorph+ ;
 #pragma link C++ class RooStepFunction+ ;
 #pragma link C++ class RooMultiBinomial+ ;
 #pragma link C++ class Roo1DMomentMorphFunction+ ;
