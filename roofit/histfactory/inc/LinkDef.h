@@ -27,6 +27,7 @@
 #pragma link C++ class RooStats::HistFactory::HistFactoryNavigation+ ;  
 
 #pragma link C++ class RooStats::HistFactory::ConfigParser+ ;
+
 #pragma link C++ class RooStats::HistFactory::Measurement+ ;
 #pragma read sourceClass="RooStats::HistFactory::Measurement" targetClass="RooStats::HistFactory::Measurement" checksum="[973506941]" source="std::string fPOI" target="fPOI"  code="{ fPOI.push_back(onfile.fPOI) ; }" 
 
@@ -38,6 +39,8 @@
 #pragma link C++ class RooStats::HistFactory::StatError+ ;
 #pragma link C++ class RooStats::HistFactory::StatErrorConfig+ ;
 #pragma link C++ class RooStats::HistFactory::PreprocessFunction+ ;
+#pragma link C++ class RooStats::HistFactory::RooBSpline+ ;
+#pragma link C++ class RooStats::HistFactory::RooBSplineBases+ ;
 
 #pragma link C++ class std::vector< RooStats::HistFactory::Channel >+ ;
 #pragma link C++ class std::vector< RooStats::HistFactory::Sample >+ ;
