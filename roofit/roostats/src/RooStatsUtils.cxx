@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: RooStatsUtils.cxx 47705 2012-11-29 14:37:50Z moneta $
 // Author: Kyle Cranmer   28/07/2008
 
 /*************************************************************************
@@ -270,5 +270,72 @@ namespace RooStats {
       FillTree(*myTree, data);
       return myTree;
    }
+   
+   TH1* ProfileMinOntoX( TH2& h2, bool subtractMin ) {
+      // create a 1D histogram with proper name and title
+      TString profileName( h2.GetName() );
+      profileName += "_profileOntoX";
+      TString profileTitle( h2.GetTitle() );
+      profileTitle += " profile onto x-axis";
+      TH1* h1 = new TH1D( profileName, profileTitle, h2.GetNbinsX(), h2.GetXaxis()->GetXmin(), h2.GetXaxis()->GetXmax() );
+      
+      // initialize to the maximum of the 2D hist
+      for( int x=0; x < h1->GetNbinsX()+2; x++ ) h1->SetBinContent( x, h2.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int x=0; x < h2.GetNbinsX()+2; x++ ) {
+         for( int y=0; y < h2.GetNbinsY()+2; y++ ) {
+            int binNumber2D = x + y*(h2.GetNbinsX()+2);
+            
+            // profiling
+            if( h1->GetBinContent(x) > h2.GetBinContent(binNumber2D) ) {
+               h1->SetBinContent( x, h2.GetBinContent(binNumber2D) );
+            }
+         }
+      }
+      
+      if( subtractMin ) {
+         for( int x=0; x < h1->GetNbinsX()+2; x++ ) {
+            h1->SetBinContent( x, h1->GetBinContent(x) - h1->GetMinimum() );
+         }
+      }
+      
+      return h1;
+   }
+   TH1* ProfileMinOntoY( TH2& h2, bool subtractMin ) {
+      // create a 1D histogram with proper name and title
+      TString profileName( h2.GetName() );
+      profileName += "_profileOntoY";
+      TString profileTitle( h2.GetTitle() );
+      profileTitle += " profile onto y-axis";
+      TH1* h1 = new TH1D( profileName, profileTitle, h2.GetNbinsY(), h2.GetYaxis()->GetXmin(), h2.GetYaxis()->GetXmax() );
+      
+      // initialize to the maximum of the 2D hist
+      for( int x=0; x < h1->GetNbinsX()+2; x++ ) h1->SetBinContent( x, h2.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int y=0; y < h2.GetNbinsY()+2; y++ ) {
+         for( int x=0; x < h2.GetNbinsX()+2; x++ ) {
+            int binNumber2D = x + y*(h2.GetNbinsX()+2);
+            
+            // profiling
+            if( h1->GetBinContent(y) > h2.GetBinContent(binNumber2D) ) {
+               h1->SetBinContent( y, h2.GetBinContent(binNumber2D) );
+            }
+         }
+      }
+      
+      if( subtractMin ) {
+         for( int x=0; x < h1->GetNbinsX()+2; x++ ) {
+            h1->SetBinContent( x, h1->GetBinContent(x) - h1->GetMinimum() );
+         }
+      }
+      
+      return h1;
+   }
+   
+   
+   TGraph* ProfileMin2D( TH2& h2 ) {}
+
 
 }

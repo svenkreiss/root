@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: RooStatsUtils.h 47012 2012-11-02 16:06:59Z moneta $
 // Author: Kyle Cranmer   28/07/2008
 
 /*************************************************************************
@@ -32,6 +32,8 @@
 #include "RooProdPdf.h"
 #include "RooDataSet.h"
 
+#include "TH1.h"
+#include "TH2.h"
 
 namespace RooStats {
 
@@ -123,6 +125,10 @@ namespace RooStats {
    // Create a TTree with the given name and description. All RooRealVars in the RooDataSet are represented as branches that contain values of type Double_t.
    TTree* GetAsTTree(TString name, TString desc, const RooDataSet& data);
 
+
+   TH1* ProfileMinOntoX( TH2& h2, bool subtractMin = false );
+   TH1* ProfileMinOntoY( TH2& h2, bool subtractMin = false );
+   TGraph* ProfileMin2D( TH2& h2 );
 }
 
 
