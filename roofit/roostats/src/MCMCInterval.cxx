@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: MCMCInterval.cxx 35810 2010-09-27 20:05:22Z moneta $
 // Authors: Kevin Belasco        17/06/2009
 // Authors: Kyle Cranmer         17/06/2009
 /*************************************************************************
@@ -1526,3 +1526,32 @@ Bool_t MCMCInterval::CheckParameters(const RooArgSet& parameterPoint) const
    }
    return kTRUE;
 }
+
+
+void MCMCInterval::SetNumBurnInForFractionOfEntries( double frac ) {
+   int entries = 0;
+   for( int i=0; i < fChain->Size(); i++ ) entries += fChain->Weight(i);
+   int targetBurnInEntries = (int)(frac*entries);
+   int burnInEntries = 0;
+   for( int i=0; i < fChain->Size(); i++ ) {
+      burnInEntries += fChain->Weight(i);
+      if( burnInEntries >= targetBurnInEntries ) {
+         SetNumBurnInSteps( i );
+         break;
+      }
+   }
+}
+
+void MCMCInterval::SetNumBurnInForNumEntries( int entries ) {
+   int burnInEntries = 0;
+   for( int i=0; i < fChain->Size(); i++ ) {
+      burnInEntries += fChain->Weight(i);
+      if( burnInEntries >= entries ) {
+         SetNumBurnInSteps( i );
+         break;
+      }
+   }
+}
+
+
+

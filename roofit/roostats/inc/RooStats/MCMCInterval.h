@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: MCMCInterval.h 44368 2012-05-30 15:38:44Z axel $
 // Authors: Kevin Belasco        17/06/2009
 // Authors: Kyle Cranmer         17/06/2009
 /*************************************************************************
@@ -168,6 +168,11 @@ namespace RooStats {
       // starting from the first
       virtual void SetNumBurnInSteps(Int_t numBurnInSteps)
       { fNumBurnInSteps = numBurnInSteps; }
+      
+      // set burn-in steps that correspond to a given fraction of total
+      // entries.
+      virtual void SetNumBurnInForFractionOfEntries( double frac );
+      virtual void SetNumBurnInForNumEntries( int entries );
 
       // set whether to use kernel estimation to determine the interval
       virtual void SetUseKeys(Bool_t useKeys) { fUseKeys = useKeys; }
