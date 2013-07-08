@@ -87,9 +87,18 @@ public:
   void PrintTree( std::ostream& = std::cout ); // Print to a stream
   void PrintXML( std::string Directory="", std::string NewOutputPrefix="" );
 
-  std::vector< RooStats::HistFactory::Channel >& GetChannels() { return fChannels; }
+  // deprecated
+  std::vector< RooStats::HistFactory::Channel >& GetChannels() { 
+    std::vector< RooStats::HistFactory::Channel >* c_list = new std::vector< RooStats::HistFactory::Channel >;
+    for( unsigned int i=0; i < fChannels.size(); i++ ) {
+      c_list->push_back( *(fChannels.at(i)) );
+    }
+    return *c_list;
+  }
+  std::vector< RooStats::HistFactory::Channel* >& GetChannelsPtr() { return fChannels; }
+
   RooStats::HistFactory::Channel& GetChannel( std::string );
-  void AddChannel( RooStats::HistFactory::Channel chan ) { fChannels.push_back( chan ); }
+  void AddChannel( RooStats::HistFactory::Channel chan ) { fChannels.push_back( new RooStats::HistFactory::Channel(chan) ); }
 
   bool HasChannel( std::string );
   void writeToFile( TFile* file );
@@ -111,7 +120,7 @@ public:
 protected:
 
   // Channels that make up this measurement
-  std::vector< RooStats::HistFactory::Channel > fChannels;
+  std::vector< RooStats::HistFactory::Channel* > fChannels;
 
 
 private:

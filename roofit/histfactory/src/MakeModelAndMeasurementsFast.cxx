@@ -108,8 +108,7 @@ void fastDriver(string input){
 
 
   // Make the list of measurements and channels
-  std::vector< HistFactory::Measurement > measurement_list;
-  std::vector< HistFactory::Channel >     channel_list;
+  std::vector< HistFactory::Measurement* > measurement_list;
 
   HistFactory::ConfigParser xmlParser;
 
@@ -134,11 +133,11 @@ void fastDriver(string input){
     
   for(unsigned int i = 0; i < measurement_list.size(); ++i) {
 
-    HistFactory::Measurement measurement = measurement_list.at(i);
+    HistFactory::Measurement* measurement = measurement_list.at(i);
 
-    measurement.CollectHistograms();
+    measurement->CollectHistograms();
 
-    MakeModelAndMeasurementFast( measurement );
+    MakeModelAndMeasurementFast( *measurement );
 
   }
 

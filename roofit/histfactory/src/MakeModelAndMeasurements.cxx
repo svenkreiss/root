@@ -160,7 +160,7 @@ void topDriver( string input ) {
 
   
   // Make the list of measurements and channels
-  std::vector< HistFactory::Measurement > measurement_list;
+  std::vector< HistFactory::Measurement* > measurement_list;
   //std::vector< HistFactory::Channel >     channel_list;
 
 
@@ -183,7 +183,7 @@ void topDriver( string input ) {
   
   for(unsigned int i = 0; i < measurement_list.size(); ++i) {
     
-    HistFactory::Measurement measurement = measurement_list.at(i);
+    HistFactory::Measurement* measurement = measurement_list.at(i);
     
     // Add the channels to this measurement
     //for( unsigned int chanItr = 0; chanItr < channel_list.size(); ++chanItr ) {
@@ -193,15 +193,15 @@ void topDriver( string input ) {
     // This part (OF COURSE) needs to be added:
     
 
-    std::string rowTitle = measurement.GetName();
-    std::string outputFileName = measurement.GetOutputFilePrefix() + "_" + measurement.GetName() + ".root";
+    std::string rowTitle = measurement->GetName();
+    std::string outputFileName = measurement->GetOutputFilePrefix() + "_" + measurement->GetName() + ".root";
 
-    double lumiError = measurement.GetLumi()*measurement.GetLumiRelErr();
+    double lumiError = measurement->GetLumi()*measurement->GetLumiRelErr();
 
     TFile* outFile = new TFile(outputFileName.c_str(), "recreate");
-    HistoToWorkspaceFactory factory(measurement.GetOutputFilePrefix(), rowTitle, measurement.GetConstantParams(), 
-				    measurement.GetLumi(), lumiError, 
-				    measurement.GetBinLow(), measurement.GetBinHigh(), outFile);
+    HistoToWorkspaceFactory factory(measurement->GetOutputFilePrefix(), rowTitle, measurement->GetConstantParams(), 
+				    measurement->GetLumi(), lumiError, 
+				    measurement->GetBinLow(), measurement->GetBinHigh(), outFile);
     
     // Create the workspaces for the channels
     vector<RooWorkspace*> channel_workspaces;
@@ -214,19 +214,19 @@ void topDriver( string input ) {
 
     // read the xml for each channel and combine
 
-    for( unsigned int chanItr = 0; chanItr < measurement.GetChannels().size(); ++chanItr ) {
+    for( unsigned int chanItr = 0; chanItr < measurement->GetChannels().size(); ++chanItr ) {
 
-      HistFactory::Channel& channel = measurement.GetChannels().at( chanItr );
+      HistFactory::Channel& channel = measurement->GetChannels().at( chanItr );
 
 
       string ch_name=channel.GetName();
       channel_names.push_back(ch_name);
 
       std::vector< EstimateSummary > dummy;
-      RooWorkspace* ws = factory.MakeSingleChannelModel( dummy, measurement.GetConstantParams() );
+      RooWorkspace* ws = factory.MakeSingleChannelModel( dummy, measurement->GetConstantParams() );
       if( ws==NULL ) {
 	std::cout << "Failed to create SingleChannelModel for channel: " << channel.GetName()
-		  << " and measurement: " << measurement.GetName() << std::endl;
+		  << " and measurement: " << measurement->GetName() << std::endl;
 	throw hf_exc();
       }
       //RooWorkspace* ws = factory.MakeSingleChannelModel( channel );
@@ -235,8 +235,8 @@ void topDriver( string input ) {
       // set poi in ModelConfig
       ModelConfig* proto_config = (ModelConfig *) ws->obj("ModelConfig");
 
-      std::cout << "Setting Parameter of Interest as :" << measurement.GetPOI() << endl;
-      RooRealVar* poi = (RooRealVar*) ws->var( (measurement.GetPOI()).c_str() );
+      std::cout << "Setting Parameter of Interest as :" << measurement->GetPOI() << endl;
+      RooRealVar* poi = (RooRealVar*) ws->var( (measurement->GetPOI()).c_str() );
       RooArgSet * params= new RooArgSet;
       if(poi){
 	params->add(*poi);
@@ -246,8 +246,8 @@ void topDriver( string input ) {
 
       // Gamma/Uniform Constraints:
       // turn some Gaussian constraints into Gamma/Uniform/LogNorm constraints, rename model newSimPdf
-      if( measurement.GetGammaSyst().size()>0 || measurement.GetUniformSyst().size()>0 || measurement.GetLogNormSyst().size()>0) {
-	factory.EditSyst( ws, ("model_"+ch_name).c_str(), measurement.GetGammaSyst(), measurement.GetUniformSyst(), measurement.GetLogNormSyst());
+      if( measurement->GetGammaSyst().size()>0 || measurement->GetUniformSyst().size()>0 || measurement->GetLogNormSyst().size()>0) {
+	factory.EditSyst( ws, ("model_"+ch_name).c_str(), measurement->GetGammaSyst(), measurement->GetUniformSyst(), measurement->GetLogNormSyst());
 	proto_config->SetPdf( *ws->pdf("newSimPdf") );
       }
 
@@ -256,20 +256,20 @@ void topDriver( string input ) {
       if(poi){
 	proto_config->GuessObsAndNuisance(*expData);
       }
-      std::string ChannelFileName = measurement.GetOutputFilePrefix() + "_" + ch_name + "_" + rowTitle + "_model.root";
+      std::string ChannelFileName = measurement->GetOutputFilePrefix() + "_" + ch_name + "_" + rowTitle + "_model.root";
       ws->writeToFile( ChannelFileName.c_str() );
       
       // Now, write the measurement to the file
       // Make a new measurement for only this channel
-      RooStats::HistFactory::Measurement meas_chan( measurement );
-      meas_chan.GetChannels().clear();
-      meas_chan.GetChannels().push_back( channel );
+      RooStats::HistFactory::Measurement* meas_chan = new RooStats::HistFactory::Measurement( *measurement );
+      meas_chan->GetChannels().clear();
+      meas_chan->GetChannels().push_back( channel );
       TFile* chanFile = TFile::Open( ChannelFileName.c_str(), "UPDATE" );
-      meas_chan.writeToFile( chanFile );
+      meas_chan->writeToFile( chanFile );
       chanFile->Close();
 
       // do fit unless exportOnly requested
-      if(! measurement.GetExportOnly() ){
+      if(! measurement->GetExportOnly() ){
 	if(!poi){
 	  cout <<"can't do fit for this channel, no parameter of interest"<<endl;
 	} else{
@@ -288,14 +288,14 @@ void topDriver( string input ) {
     }
     // Gamma/Uniform Constraints:
     // turn some Gaussian constraints into Gamma/Uniform/logNormal constraints, rename model newSimPdf
-    if( measurement.GetGammaSyst().size()>0 || measurement.GetUniformSyst().size()>0 || measurement.GetLogNormSyst().size()>0) 
-      factory.EditSyst(ws, "simPdf", measurement.GetGammaSyst(), measurement.GetUniformSyst(), measurement.GetLogNormSyst());
+    if( measurement->GetGammaSyst().size()>0 || measurement->GetUniformSyst().size()>0 || measurement->GetLogNormSyst().size()>0) 
+      factory.EditSyst(ws, "simPdf", measurement->GetGammaSyst(), measurement->GetUniformSyst(), measurement->GetLogNormSyst());
     //
     // set parameter of interest according to the configuration
     //
     ModelConfig * combined_config = (ModelConfig *) ws->obj("ModelConfig");
-    cout << "Setting Parameter of Interest as :" << measurement.GetPOI() << endl;
-    RooRealVar* poi = (RooRealVar*) ws->var( (measurement.GetPOI()).c_str() );
+    cout << "Setting Parameter of Interest as :" << measurement->GetPOI() << endl;
+    RooRealVar* poi = (RooRealVar*) ws->var( (measurement->GetPOI()).c_str() );
     //RooRealVar* poi = (RooRealVar*) ws->var((POI+"_comb").c_str());
     RooArgSet * params= new RooArgSet;
     cout << poi << endl;
@@ -306,23 +306,23 @@ void topDriver( string input ) {
     ws->Print();
 
     // Set new PDF if there are gamma/uniform constraint terms
-    if( measurement.GetGammaSyst().size()>0 || measurement.GetUniformSyst().size()>0 || measurement.GetLogNormSyst().size()>0) 
+    if( measurement->GetGammaSyst().size()>0 || measurement->GetUniformSyst().size()>0 || measurement->GetLogNormSyst().size()>0) 
       combined_config->SetPdf(*ws->pdf("newSimPdf"));
 
     RooAbsData* simData = ws->data("simData");
     combined_config->GuessObsAndNuisance(*simData);
     //	  ws->writeToFile(("results/model_combined_edited.root").c_str());
-    std::string CombinedFileName = measurement.GetOutputFilePrefix()+"_combined_"+rowTitle+"_model.root";
+    std::string CombinedFileName = measurement->GetOutputFilePrefix()+"_combined_"+rowTitle+"_model.root";
     ws->writeToFile( CombinedFileName.c_str() );
     TFile* combFile = TFile::Open( CombinedFileName.c_str(), "UPDATE" );
-    measurement.writeToFile( combFile );
+    measurement->writeToFile( combFile );
     combFile->Close();
 
 
 
     // TO DO:
     // Totally factorize the statistical test in "fit Model" to a different area
-    if(! measurement.GetExportOnly() ){
+    if(! measurement->GetExportOnly() ){
       if(!poi){
 	cout <<"can't do fit for this channel, no parameter of interest"<<endl;
       } else{

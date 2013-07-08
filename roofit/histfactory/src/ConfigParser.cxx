@@ -31,7 +31,7 @@ using namespace HistFactory;
 
 using namespace std;
 
-std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsFromXML( string input ) {
+std::vector< RooStats::HistFactory::Measurement* > ConfigParser::GetMeasurementsFromXML( string input ) {
  
   // Open an input "Driver" XML file (input),
   // Parse that file and its channel files
@@ -41,7 +41,7 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
 
   // Create the list of measurements
   // (This is what will be returned)
-  std::vector< HistFactory::Measurement > measurement_list;
+  std::vector< HistFactory::Measurement* > measurement_list;
 
   try {
 
@@ -89,7 +89,7 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
 
       /*
 	else if( attrName == TString( "InputFile" ) ) {
-        channel.InputFile = attrVal ;
+        channel->InputFile = attrVal ;
 	}
       */
 
@@ -171,9 +171,9 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
       }
 
       else if( node->GetNodeName() == TString( "Measurement" ) ) {
-	HistFactory::Measurement measurement = CreateMeasurementFromDriverNode( node );
+	HistFactory::Measurement* measurement = CreateMeasurementFromDriverNode( node );
 	// Set the prefix (obtained above)
-	measurement.SetOutputFilePrefix( OutputFilePrefix );
+	measurement->SetOutputFilePrefix( OutputFilePrefix );
 	measurement_list.push_back( measurement );
       }
 
@@ -206,7 +206,7 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
     }
     else {
       std::cout << "Found Measurements: ";
-      for( unsigned int i=0; i < measurement_list.size(); ++i )   std::cout << " " << measurement_list.at(i).GetName();
+      for( unsigned int i=0; i < measurement_list.size(); ++i )   std::cout << " " << measurement_list.at(i)->GetName();
       std::cout << std::endl;
     }
 
@@ -216,7 +216,7 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
     // }
     // Add the preprocessed functions to each measurement
     for( unsigned int i = 0; i < measurement_list.size(); ++i) {
-      measurement_list.at(i).SetFunctionObjects( functionObjects );
+      measurement_list.at(i)->SetFunctionObjects( functionObjects );
     }
 
     // Create an instance of the class
@@ -226,27 +226,27 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
     // Create the list of channels
     // (Each of these will be added 
     //  to every measurement)
-    std::vector< HistFactory::Channel > channel_list;
+    std::vector< HistFactory::Channel* > channel_list;
 
     // Fill the list of channels
     for( unsigned int i = 0; i < xml_channel_files.size(); ++i ) {
       std::string channel_xml = xml_channel_files.at(i);
       std::cout << "Parsing Channel: " << channel_xml << std::endl;
-      HistFactory::Channel channel =  ParseChannelXMLFile( channel_xml );
+      HistFactory::Channel* channel =  ParseChannelXMLFile( channel_xml );
 
       // Get the histograms for the channel
       //collector.CollectHistograms( channel );
-      //channel.CollectHistograms();
+      //channel->CollectHistograms();
       channel_list.push_back( channel );
     }
 
     // Finally, add the channels to the measurements:
     for( unsigned int i = 0; i < measurement_list.size(); ++i) {
 
-      HistFactory::Measurement& measurement = measurement_list.at(i);
+      HistFactory::Measurement* measurement = measurement_list.at(i);
 
       for( unsigned int j = 0; j < channel_list.size(); ++j ) {
-	measurement.GetChannels().push_back( channel_list.at(j) );
+	measurement->GetChannelsPtr().push_back( channel_list.at(j) );
       }
     }
   }
@@ -261,17 +261,17 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
 }
 									     
 
-HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode* node ) {
+HistFactory::Measurement* ConfigParser::CreateMeasurementFromDriverNode( TXMLNode* node ) {
 
 
-  HistFactory::Measurement measurement;
+  HistFactory::Measurement* measurement = new HistFactory::Measurement;
 
   // Set the default values:
-  measurement.SetLumi( 1.0 );
-  measurement.SetLumiRelErr( .10 );
-  measurement.SetBinLow( 0 );
-  measurement.SetBinHigh( 1 );
-  measurement.SetExportOnly( false );
+  measurement->SetLumi( 1.0 );
+  measurement->SetLumiRelErr( .10 );
+  measurement->SetBinLow( 0 );
+  measurement->SetBinHigh( 1 );
+  measurement->SetExportOnly( false );
 
   std::cout << "Creating new measurement: " << std::endl;
 
@@ -287,26 +287,26 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
     }
     else if( curAttr->GetName() == TString( "Name" ) ) {
       //rowTitle=curAttr->GetValue();
-      measurement.SetName(  curAttr->GetValue() );
-      //measurement.OutputFileName = outputFileNamePrefix+"_"+rowTitle+".root";
+      measurement->SetName(  curAttr->GetValue() );
+      //measurement->OutputFileName = outputFileNamePrefix+"_"+rowTitle+".root";
     }
     else if( curAttr->GetName() == TString( "Lumi" ) ) {
-      measurement.SetLumi( atof(curAttr->GetValue()) );
+      measurement->SetLumi( atof(curAttr->GetValue()) );
     }
     else if( curAttr->GetName() == TString( "LumiRelErr" ) ) {
-      measurement.SetLumiRelErr( atof(curAttr->GetValue()) );
+      measurement->SetLumiRelErr( atof(curAttr->GetValue()) );
     }
     else if( curAttr->GetName() == TString( "BinLow" ) ) {
-      measurement.SetBinLow( atoi(curAttr->GetValue()) );
+      measurement->SetBinLow( atoi(curAttr->GetValue()) );
     }
     else if( curAttr->GetName() == TString( "BinHigh" ) ) {
-      measurement.SetBinHigh( atoi(curAttr->GetValue()) );
+      measurement->SetBinHigh( atoi(curAttr->GetValue()) );
     }
     else if( curAttr->GetName() == TString( "Mode" ) ) {
       cout <<"\n INFO: Mode attribute is deprecated, will ignore\n"<<endl;
     }
     else if( curAttr->GetName() == TString( "ExportOnly" ) ) {
-      measurement.SetExportOnly( CheckTrueFalse(curAttr->GetValue(),"Measurement") );
+      measurement->SetExportOnly( CheckTrueFalse(curAttr->GetValue(),"Measurement") );
     }
 
     else {
@@ -333,8 +333,8 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
 		  << " has no text." << std::endl;
 	throw hf_exc();
       }
-      //poi// measurement.SetPOI( child->GetText() );
-      measurement.AddPOI( child->GetText() );
+      //poi// measurement->SetPOI( child->GetText() );
+      measurement->AddPOI( child->GetText() );
     }
 
     else if( child->GetNodeName() == TString( "ParamSetting" ) ) {
@@ -354,7 +354,7 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
 			<< " has no text." << std::endl;
 	      throw hf_exc();
 	    }
-	    AddSubStrings( measurement.GetConstantParams(), child->GetText() );
+	    AddSubStrings( measurement->GetConstantParams(), child->GetText() );
 	  }
 	}
 	else if( curParam->GetName() == TString( "Val" ) ) {
@@ -366,9 +366,9 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
 	  }
 	  std::vector<std::string> child_nodes = GetChildrenFromString(child->GetText());
 	  for(unsigned int i = 0; i < child_nodes.size(); ++i) {
-	    measurement.SetParamValue( child_nodes.at(i), val);
+	    measurement->SetParamValue( child_nodes.at(i), val);
 	  }
-	  // AddStringValPairToMap( measurement.GetParamValues(), val, child->GetText() );
+	  // AddStringValPairToMap( measurement->GetParamValues(), val, child->GetText() );
 	}
 	else {
 	  std::cout << "Found tag attribute with unknown name in ParamSetting: "
@@ -427,7 +427,7 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
 	AddParamsToAsimov( asimov, ParamFixString );
       }
       
-      measurement.AddAsimovDataset( asimov );
+      measurement->AddAsimovDataset( asimov );
 
     }
 
@@ -487,28 +487,28 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
       if (type=="Gamma" && rel!=0) {
 	for (vector<string>::const_iterator it=syst.begin(); it!=syst.end(); it++) {
 	  // Fix Here...?
-	  measurement.GetGammaSyst()[(*it).c_str()] = rel;
+	  measurement->GetGammaSyst()[(*it).c_str()] = rel;
 	}
       }
 	
       if (type=="Uniform" && rel!=0) {
 	for (vector<string>::const_iterator it=syst.begin(); it!=syst.end(); it++) {
 	  // Fix Here...?
-	  measurement.GetUniformSyst()[(*it).c_str()] = rel;
+	  measurement->GetUniformSyst()[(*it).c_str()] = rel;
 	}
       }
 	
       if (type=="LogNormal" && rel!=0) {
 	for (vector<string>::const_iterator it=syst.begin(); it!=syst.end(); it++) {
 	  // Fix Here...?
-	  measurement.GetLogNormSyst()[(*it).c_str()] = rel;
+	  measurement->GetLogNormSyst()[(*it).c_str()] = rel;
 	}
       }
 	
       if (type=="NoConstraint") {
 	for (vector<string>::const_iterator it=syst.begin(); it!=syst.end(); it++) {
 	  // Fix Here...?
-	  measurement.GetNoSyst()[(*it).c_str()] = 1.0; // MB : dummy value
+	  measurement->GetNoSyst()[(*it).c_str()] = 1.0; // MB : dummy value
 	}
       }
     } // End adding of Constraint terms
@@ -525,7 +525,7 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
     child = child->GetNextNode();
   }
 
-  measurement.PrintTree();
+  measurement->PrintTree();
   std::cout << std::endl;
 
   return measurement;
@@ -534,7 +534,7 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode( TXMLNode
 
 
 
-HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
+HistFactory::Channel* ConfigParser::ParseChannelXMLFile( string filen ) {
 
   /*
   TString lumiStr;
@@ -571,11 +571,11 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
   // configure it based on the XML
   // and return it
 
-  HistFactory::Channel channel;
+  HistFactory::Channel* channel = new HistFactory::Channel;
 
   // Set the default values:
-  channel.SetInputFile( "" );
-  channel.SetHistoPath( "" );
+  channel->SetInputFile( "" );
+  channel->SetHistoPath( "" );
 
   // Walk through the root node and
   // get its attributes
@@ -593,13 +593,13 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
     }
 
     else if( attrName == TString( "Name" ) ) {
-      channel.SetName( attrVal );
-      std::cout << " : creating a channel named " << channel.GetName() << std::endl;
+      channel->SetName( attrVal );
+      std::cout << " : creating a channel named " << channel->GetName() << std::endl;
     }
 
     else if( attrName == TString( "InputFile" ) ) {
       std::cout << "Setting InputFile for this channel: " << attrVal << std::endl;
-      channel.SetInputFile( attrVal );
+      channel->SetInputFile( attrVal );
       // Set the current (cached) value
       m_currentInputFile = attrVal;        
     }
@@ -607,7 +607,7 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
     else if( curAttr->GetName() == TString( "HistoPath" ) ) {
       std::cout << "Setting HistoPath for this channel: " << attrVal << std::endl;
       // Set the current (cached) value
-      channel.SetHistoPath( attrVal );
+      channel->SetHistoPath( attrVal );
       m_currentHistoPath = attrVal;  
     }
 
@@ -627,12 +627,12 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
     
   // Check that the channel was properly initiated:
   
-  if( channel.GetName() == "" ) {
+  if( channel->GetName() == "" ) {
     std::cout << "Error: Channel created with no name" << std::endl;
     throw hf_exc();
   }
 
-  m_currentChannel = channel.GetName();
+  m_currentChannel = channel->GetName();
 
   // Loop over the children nodes in the XML file
   // and configure the channel based on them
@@ -644,8 +644,8 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
   while( node != 0 ) {
 
     // Restore the Channel-Wide Defaults
-    m_currentInputFile = channel.GetInputFile();
-    m_currentHistoPath = channel.GetHistoPath();
+    m_currentInputFile = channel->GetInputFile();
+    m_currentHistoPath = channel->GetHistoPath();
     
     if( node->GetNodeName() == TString( "" ) ) {
       std::cout << "Error: Encountered node in Channel with no name" << std::endl;
@@ -658,23 +658,23 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
 	if( data.GetName() != "" ) {
 	  std::cout << "Error: You can only rename the datasets of additional data sets.  " 
 		    << "  Remove the 'Name=" << data.GetName() << "' tag"
-		    << " from channel: " << channel.GetName() << std::endl;
+		    << " from channel: " << channel->GetName() << std::endl;
 	  throw hf_exc();
 	}
-	channel.SetData( data );
+	channel->SetData( data );
 	firstData=false;
       }
       else {
-	channel.AddAdditionalData( CreateDataElement(node) );
+	channel->AddAdditionalData( CreateDataElement(node) );
       }
     }
 
     else if( node->GetNodeName() == TString( "StatErrorConfig" ) ) {
-      channel.SetStatErrorConfig( CreateStatErrorConfigElement(node) );
+      channel->SetStatErrorConfig( CreateStatErrorConfigElement(node) );
     }
 
     else if( node->GetNodeName() == TString( "Sample" ) ) {
-      channel.GetSamples().push_back( CreateSampleElement(node) );
+      channel->GetSamples().push_back( CreateSampleElement(node) );
     }
 
     else if( IsAcceptableNode( node ) ) { ; }
@@ -689,7 +689,7 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
   } // End loop over tags in this channel
 
   std::cout << "Created Channel: " << std::endl;
-  channel.Print();
+  channel->Print();
 
   return channel;
 

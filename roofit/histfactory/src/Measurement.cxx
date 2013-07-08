@@ -111,8 +111,8 @@ bool RooStats::HistFactory::Measurement::HasChannel( std::string ChanName ) {
 
   for( unsigned int i = 0; i < fChannels.size(); ++i ) {
 
-    Channel& chan = fChannels.at(i);
-    if( chan.GetName() == ChanName ) {
+    Channel* chan = fChannels.at(i);
+    if( chan->GetName() == ChanName ) {
       return true;
     }
 
@@ -126,9 +126,9 @@ RooStats::HistFactory::Channel& RooStats::HistFactory::Measurement::GetChannel( 
 
   for( unsigned int i = 0; i < fChannels.size(); ++i ) {
 
-    Channel& chan = fChannels.at(i);
-    if( chan.GetName() == ChanName ) {
-      return chan;
+    Channel* chan = fChannels.at(i);
+    if( chan->GetName() == ChanName ) {
+      return *chan;
     }
 
   }
@@ -187,7 +187,7 @@ void RooStats::HistFactory::Measurement::PrintTree( std::ostream& stream ) {
   if( fChannels.size() != 0 ) {
     stream << "Channels:" << std::endl;
     for( unsigned int i = 0; i < fChannels.size(); ++i ) {
-      fChannels.at(i).Print( stream );
+      fChannels.at(i)->Print( stream );
     }
   }
 
@@ -274,7 +274,7 @@ void RooStats::HistFactory::Measurement::PrintXML( std::string Directory, std::s
 
   // Add the list of channels
   for( unsigned int i = 0; i < fChannels.size(); ++i ) {
-    xml << "  <Input>" << "./" << Directory << "/" << GetName() << "_" << fChannels.at(i).GetName() << ".xml" << "</Input>" << std::endl;
+    xml << "  <Input>" << "./" << Directory << "/" << GetName() << "_" << fChannels.at(i)->GetName() << ".xml" << "</Input>" << std::endl;
   }
 
   xml << std::endl;
@@ -317,7 +317,7 @@ void RooStats::HistFactory::Measurement::PrintXML( std::string Directory, std::s
   std::string Prefix = std::string(GetName()) + "_";
 
   for( unsigned int i = 0; i < fChannels.size(); ++i ) {
-    fChannels.at(i).PrintXML( Directory, Prefix );
+    fChannels.at(i)->PrintXML( Directory, Prefix );
   }
 
 
@@ -353,11 +353,11 @@ void RooStats::HistFactory::Measurement::writeToFile( TFile* file ) {
     file->Flush();
 
     // Get the name of the channel:
-    RooStats::HistFactory::Channel& channel = outMeas.fChannels.at( chanItr );
-    std::string chanName = channel.GetName();
+    RooStats::HistFactory::Channel* channel = outMeas.fChannels.at( chanItr );
+    std::string chanName = channel->GetName();
 
     
-    if( ! channel.CheckHistograms() ) {
+    if( ! channel->CheckHistograms() ) {
       std::cout << "Measurement.writeToFile(): Channel: " << chanName
 		<< " has uninitialized histogram pointers" << std::endl;
       throw hf_exc();
@@ -367,7 +367,7 @@ void RooStats::HistFactory::Measurement::writeToFile( TFile* file ) {
     // Get and cache the histograms for this channel:
     //collector.CollectHistograms( channel );
     // Do I need this...?
-    // channel.CollectHistograms();
+    // channel->CollectHistograms();
 
     // Make a directory to store the histograms
     // for this channel
@@ -389,26 +389,26 @@ void RooStats::HistFactory::Measurement::writeToFile( TFile* file ) {
     }
     dataDir->cd();
 
-    channel.fData.writeToFile( OutputFileName, GetDirPath(dataDir) );
+    channel->fData.writeToFile( OutputFileName, GetDirPath(dataDir) );
 
     /*
     // Write the data file to this directory
-    TH1* hData = channel.data.GetHisto();
+    TH1* hData = channel->data.GetHisto();
     hData->Write();
 
     // Set the location of the data
     // in the output measurement
 
-    channel.data.InputFile = OutputFileName;
-    channel.data.HistoName = hData->GetName();
-    channel.data.HistoPath = GetDirPath( dataDir );
+    channel->data.InputFile = OutputFileName;
+    channel->data.HistoName = hData->GetName();
+    channel->data.HistoPath = GetDirPath( dataDir );
     */
 
     // Loop over samples:
 
-    for( unsigned int sampItr = 0; sampItr < channel.GetSamples().size(); ++sampItr ) {
+    for( unsigned int sampItr = 0; sampItr < channel->GetSamples().size(); ++sampItr ) {
 
-      RooStats::HistFactory::Sample& sample = channel.GetSamples().at( sampItr );
+      RooStats::HistFactory::Sample& sample = channel->GetSamples().at( sampItr );
       std::string sampName = sample.GetName();
       
       std::cout << "Writing sample: " << sampName << std::endl;
@@ -535,9 +535,9 @@ void RooStats::HistFactory::Measurement::CollectHistograms() {
 
   for( unsigned int chanItr = 0; chanItr < fChannels.size(); ++chanItr) {
 
-    RooStats::HistFactory::Channel& chan = fChannels.at( chanItr );
+    RooStats::HistFactory::Channel* chan = fChannels.at( chanItr );
     
-    chan.CollectHistograms();
+    chan->CollectHistograms();
 
   }
 
