@@ -14,7 +14,6 @@ parser = optparse.OptionParser(version="0.1")
 parser.add_option("-i", "--inputFiles", help="glob expression for log files from BatchProfileLikelihood.py", type="string", dest="inputFiles", default="batchProfile.log")
 parser.add_option("-o", "--outputFile", help="output root file", type="string", dest="outputFile", default="PL_data.root")
 parser.add_option(      "--subtractMinNLL", help="subtracts the minNLL", dest="subtractMinNLL", default=False, action="store_true")
-#parser.add_option(      "--
 parser.add_option("-q", "--quiet", dest="verbose", action="store_false", default=True, help="Quiet output.")
 (options, args) = parser.parse_args()
 
@@ -25,6 +24,19 @@ import os, math
 import glob, re
 from array import array
 
+
+
+def getContours( hist, level, levelName, canvas ):
+   hist.SetContour( 1, array('d',[level]) )
+   hist.Draw( "CONT LIST" )
+   canvas.Update()
+   listOfGraphs = ROOT.gROOT.GetListOfSpecials().FindObject("contours").At(0)
+   contours = [ ROOT.TGraph( listOfGraphs.At(i) ) for i in range( listOfGraphs.GetSize() ) ]
+   for co in range( len(contours) ):
+      contours[co].SetLineWidth( 2 )
+      contours[co].SetLineColor( ROOT.kBlue )
+      contours[co].SetName( "Contour%s_%d" % (levelName,co) )
+   return contours
 
 
 
@@ -60,8 +72,6 @@ def getInputFromLogs( files ):
                NLL[ nuisName ] = []
                
          if l[:4] == "nll=":
-#             parAndValue = [(r.split("=")[0],float(r.split("=")[1])) for r in l.split(", ")]
-#             for p,v in parAndValue: NLL[p].append(v)
             pars = {}
             parAndValues = l.split(", ")
             for pv in parAndValues:
@@ -77,18 +87,25 @@ def getInputFromLogs( files ):
                   NLL[ p ].append( v )
             else:
                print( "WARNING: Did not find all parameters. Not adding values. line: "+l )
+
          if l[:14] == "ucmles -- nll=":
-            parAndValue = [(r.split("=")[0],float(r.split("=")[1])) for r in l.split(", ")]
-            for p,v in parAndValue:
-               if p == "ucmles -- nll": p = "nll"
-               bestFit[p] = v
-#             parAndValues = l.split(", ")
-#             for pv in parAndValues:
-#                regm = regexParValue.match( pv )
-#                if regm: 
-#                   par = regm.groupdict()['par']
-#                   if par == "ucmles -- nll": par = "nll"
-#                   NLL[ par ].append(  float(regm.groupdict()['value'])   )
+            pars = {}
+            parAndValues = l.split(", ")
+            for pv in parAndValues:
+               regm = regexParValue.match( pv )
+               if regm:
+                  try:
+                     pars[ regm.groupdict()['par'] ] = float(regm.groupdict()['value'])
+                  except ValueError:
+                     print( "WARNING could not convert value to float." )
+            
+            if len( pars.keys() ) == len( POIs )+len( NUISs ):
+               for p,v in pars.iteritems():
+                  if p == "ucmles -- nll": p = "nll"
+                  bestFit[ p ] = v
+            else:
+               print( "WARNING: Did not find all parameters. Not adding values. line: "+l )
+
       f.close()
       
    return (POIs,NUISs,NLL,bestFit)
@@ -101,7 +118,7 @@ def main():
    print( POIs )
 
    print( "\n--- Best fit ---" )
-   print( bestFit )
+   print( [ (name,value) for name,value in bestFit.iteritems() if name in [p[0] for p in POIs] or name == 'nll' ] )
 
    print( "\n--- NLL ---" )
    maxNLL = max( [n for n in NLL['nll'] if n < 1e10] )
@@ -114,7 +131,17 @@ def main():
       if NLL['nll'][i] > maxNLL: NLL['nll'][i] = maxNLL
    print( "(minNLL,maxNLL) = (%f,%f)" % (minNLL,maxNLL) )
 
+
+   bestFitMarker = None
+   if len( POIs ) == 1  and  POIs[0][0] in bestFit:
+      bestFitMarker = ROOT.TMarker( bestFit[ POIs[0][0] ], 0.0, 2 )
+   elif len( POIs ) >= 2  and  POIs[0][0] in bestFit  and  POIs[1][0] in bestFit:
+      bestFitMarker = ROOT.TMarker( bestFit[ POIs[0][0] ], bestFit[ POIs[1][0] ], 2 )
+      
+
+
    nllHist = None
+   tgs = []
    maxHist = maxNLL
    if options.subtractMinNLL: maxHist -= minNLL
    if len( POIs ) == 1:
@@ -148,6 +175,11 @@ def main():
          val = nll
          if options.subtractMinNLL: val -= minNLL
          if nllHist.GetBinContent( bin ) > val: nllHist.SetBinContent( bin, val )
+         
+      # in 2D, also create 68% and 95% contours
+      c = ROOT.TCanvas()
+      tgs += getContours( nllHist, 1.15, "68TG", c )
+      tgs += getContours( nllHist, 3.0,  "95TG", c )
       
    if not nllHist:
       print( "ERROR: Couldn't create nll histogram." )
@@ -177,31 +209,93 @@ def main():
    nllTGraphs = {}
    nuisParGraphs = {}
    for poi in POIs:
-      pn = [ (p,n) for p,n in zip(NLL[poi[0]], NLL['nll']) if n < minNLL+100.0 ]
-      nllTGraph = PyROOTUtils.Graph( pn )
+      xDict = {}
+      for x,n in zip( NLL[poi[0]], NLL['nll'] ):
+         if x in xDict: xDict[x].append( n )
+         else:          xDict[x] = [ n ]
+      # profile in unseen poi directions
+      nllTGraph = PyROOTUtils.Graph( [(x,min(y)) for x,y in xDict.iteritems()] )
       if options.subtractMinNLL: nllTGraph.add( -minNLL )
       nllTGraphs[poi[0]] = nllTGraph
+      
 
       for nuis in NUISs:
-         g = PyROOTUtils.Graph( NLL[poi[0]], NLL[nuis[0]] )
-         nuisParGraphs[poi[0]+"_vs_"+nuis[0]] = g
+         xA = NLL[ poi[0] ]
+         if poi[0] != POIs[0][0]: xOtherA = NLL[ POIs[0][0] ]
+         elif len( POIs ) > 1:    xOtherA = NLL[ POIs[1][0] ]
+         else:                    xOtherA = NLL[ POIs[0][0] ]  # just a place holder
+         yA = NLL[ nuis[0] ]
+         nllA = NLL[ 'nll' ]
+         
+         xDict = {}
+         for x,xOther,y,n in zip(xA,xOtherA,yA,nllA):
+            if x in xDict: xDict[x].append( (n,y,xOther) )
+            else:          xDict[x] = [ (n,y,xOther) ]
+
+         xAMin      = [ x          for x,ny in xDict.iteritems() ]
+         yAMin      = [ min(ny)[1] for x,ny in xDict.iteritems() ]
+         nuisParGraphs[ poi[0]+"_vs_"+nuis[0] ] = PyROOTUtils.Graph( xAMin, yAMin, nameTitle="nuisPar_"+poi[0]+"_vs_"+nuis[0] )
+
+         if len( POIs ) > 1:
+            # profile in unseen poi directions
+            #    Create an xOther to distinguish whether this point is in the
+            #    +1sigma or -1sigma contour. In cases where y is not convex,
+            #    this will still create a correct line when the likelihood is
+            #    convex in the POI space.
+            #    Ie lines where the 2sigma line dips below the 1sigma line and
+            #    even crosses it are correct and using this are also drawn correctly.
+            xOtherAMin = [ min(ny)[2] for x,ny in xDict.iteritems() ]
+
+            # var values at contours:
+            thresholds = [2.3/2.0, 6.0/2.0]  # 2d: 68% and 95%
+            for t in thresholds:
+               xyPos = []
+               xyNeg = []
+               for x,ny,xOtherMin in zip( xDict.keys(),xDict.values(),xOtherAMin ):
+                  # skip if the smallest nll is not below the threshold
+                  if min(ny)[0] > minNLL+t: continue
+            
+                  # build a list of y values larger than ymin and find the value closest to the threshold
+                  nySlice = [ (math.fabs(n-minNLL-t),y) for n,y,xOther in ny if xOther > xOtherMin ]
+                  if nySlice: xyPos.append( (x,min(nySlice)[1]) )
+                  # build a list of y values less than ymin and find the value closest to the threshold
+                  nySlice = [ (math.fabs(n-minNLL-t),y) for n,y,xOther in ny if xOther < xOtherMin ]
+                  if nySlice: xyNeg.append( (x,min(nySlice)[1]) )
+               
+               if xyPos: nuisParGraphs[ poi[0]+"_vs_"+nuis[0]+"_thresholdPos_"+str(t) ] = PyROOTUtils.Graph( xyPos )
+               if xyNeg: nuisParGraphs[ poi[0]+"_vs_"+nuis[0]+"_thresholdNeg_"+str(t) ] = PyROOTUtils.Graph( xyNeg )
+            
+            # make a histogram
+            nllHistNuisPoi = ROOT.TH2D( 
+               "nuisPar_"+poi[0]+"_vs_"+nuis[0]+"_nllHist", 
+               "profiled NLL;"+poi[0]+";"+nuis[0]+";NLL",
+               int(poi[1][0]), poi[1][1], poi[1][2],
+               int(nuis[1][0]), min(yA), max(yA),
+            )
+            for x,y,n in zip( NLL[ poi[0] ], NLL[ nuis[0] ], NLL[ 'nll' ] ):
+               b = nllHistNuisPoi.FindBin( x,y )
+               if nllHistNuisPoi.GetBinContent( b ) == 0.0  or  nllHistNuisPoi.GetBinContent( b ) > n-minNLL:
+                  nllHistNuisPoi.SetBinContent( b,n-minNLL )
+            nuisParGraphs[ poi[0]+"_vs_"+nuis[0]+"_nllHist" ] = nllHistNuisPoi
+         
+            # add best fit marker in this plane
+            if poi[0] in bestFit and nuis[0] in bestFit:
+               nuisParGraphs[ poi[0]+"_vs_"+nuis[0]+"_bestFit" ] = ROOT.TMarker( bestFit[ poi[0] ], bestFit[ nuis[0] ], 2 )
+         
+               
    
    
-   bestFitMarker = None
-   if len( POIs ) == 1  and  POIs[0][0] in bestFit:
-      bestFitMarker = ROOT.TMarker( bestFit[ POIs[0][0] ], 0.0, 2 )
-   elif len( POIs ) >= 2  and  POIs[0][0] in bestFit  and  POIs[1][0] in bestFit:
-      bestFitMarker = ROOT.TMarker( bestFit[ POIs[0][0] ], bestFit[ POIs[1][0] ], 2 )
-      
-      
+   print( "Writing file: "+options.outputFile )
    f = ROOT.TFile( options.outputFile, "RECREATE" )
    nllHist.Write()
    for p,g in nllTGraphs.iteritems():
       if g: g.Write( "nll_"+p )
    for p,g in nuisParGraphs.iteritems():
-      if g: g.Write( "nuisParGraph_"+p )
+      if g: g.Write( "nuisPar_"+p )
    for h in histos2d.values():
       h.Write()
+   for tg in tgs:
+      tg.Write()
    if bestFitMarker: bestFitMarker.Write("bestFit")
    f.Close()
    
@@ -217,8 +311,13 @@ def main():
          nllTGraph.SetLineWidth( 2 )
          nllTGraph.SetLineColor( ROOT.kRed )
          nllTGraph.Draw("SAME")
-      canvas.cd(2)
-      canvas.SaveAs( "docImages/batchProfileLikelihood1D.png" )
+
+         canvas.cd(2)
+         lGraph = PyROOTUtils.Graph( nllTGraph )
+         lGraph.SetTitle( "Likelihood" )
+         lGraph.transformY( lambda y: math.exp(-y) )
+         lGraph.Draw("AXIS L")
+      canvas.SaveAs( "doc/images/batchProfileLikelihood1D.png" )
       canvas.Update()
       raw_input( "Press enter to continue ..." )
    

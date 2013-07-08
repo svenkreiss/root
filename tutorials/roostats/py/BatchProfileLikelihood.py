@@ -30,12 +30,25 @@ parser.add_option("-f", "--fullRun", help="Do a full run.", dest="fullRun", defa
 parser.add_option(      "--unconditionalFitInSeparateJob", help="Do the unconditional fit in a separate job", dest="unconditionalFitInSeparateJob", default=False, action="store_true")
 parser.add_option(      "--initVars", help="Set these vars to these values before every fit (to work-around minuit getting stuck in local minima). It takes comma separated inputs of the form var=4.0 or var=4.0+/-1.0 .", dest="initVars", default=None )
 parser.add_option(      "--printAllNuisanceParameters", help="Prints all nuisance parameters.", dest="printAllNuisanceParameters", default=False, action="store_true")
+parser.add_option(      "--skipOnInvalidNll", help="As the parameter name says.", dest="skipOnInvalidNll", default=False, action="store_true")
+parser.add_option(      "--minStrategy", help="Minuit Strategies: 0 fastest, 1 intermediate, 2 slow", dest="minStrategy", default=1, type=int)
+parser.add_option(      "--minOptimizeConst", help="NLL optimize const", dest="minOptimizeConst", default=2, type=int)
+parser.add_option(      "--reorderParameters", help="Execution order: swap x and y to scan in vertical stripes instead of horizontal. Give index of POIs like 1,0.", dest="reorderParameters", default=False)
+parser.add_option(      "--reversedParameters", help="Execution order reversed. Give index of POIs like 0,2.", dest="reversedParameters", default=False)
+parser.add_option(      "--enableOffset", help="enable likelihood offsetting", dest="enableOffset", default=False, action="store_true")
 
 parser.add_option("-q", "--quiet", dest="verbose", action="store_false", default=True, help="Quiet output.")
 options,args = parser.parse_args()
 
 # to calculate unconditionalFitInSeparateJob, reduce options.jobs by one to make room for the extra job
 if options.unconditionalFitInSeparateJob: options.jobs -= 1
+
+if options.reversedParameters: options.reversedParameters = [ int(j) for j in options.reversedParameters.split(",") ]
+else:                          options.reversedParameters = []
+
+if options.reorderParameters: options.reorderParameters = [ int(j) for j in options.reorderParameters.split(",") ]
+else:                         options.reorderParameters = []
+
 
 
 import ROOT
@@ -44,12 +57,22 @@ import helperStyle
 import PyROOTUtils
 import math
 from array import array
+import time
 
 
-def setParameterToBin( par, binNumber ):
-   par.setVal( par.getMin() +  (float(binNumber)+0.5)/par.getBins()*( par.getMax()-par.getMin() ) )
+def setParameterToBin( par, binNumber, reverse = False ):
+   if not reverse:
+      par.setVal( par.getMin() +  (float(binNumber)+0.5)/par.getBins()*( par.getMax()-par.getMin() ) )
+   else:
+      par.setVal( par.getMax() -  (float(binNumber)+0.5)/par.getBins()*( par.getMax()-par.getMin() ) )
    
-def parametersNCube( parL, i ):
+def parametersNCube( parLIn, i, reversedParameters = [], reorderParameters = [] ):
+   if parLIn.getSize() == len(reorderParameters):
+      parL = ROOT.RooArgList( "reorderedParList" )
+      for j in range( parLIn.getSize() ): parL.add( parLIn.at(reorderParameters[j]) )
+   else:
+      parL = ROOT.RooArgList( parLIn, "reorderedParList" )
+   
    for d in reversed( range(parL.getSize()) ):
       if d >= 1:
          lowerDim = reduce( lambda x,y: x*y, [parL.at(dd).getBins() for dd in range(d)] )
@@ -57,7 +80,7 @@ def parametersNCube( parL, i ):
          setParameterToBin( parL.at(d), int(i/lowerDim) )
          i -= int(i/lowerDim) * lowerDim
       else:
-         setParameterToBin( parL.at(d), i )
+         setParameterToBin( parL.at(d), i, d in reversedParameters )
          
 def jobBins( numPoints ):
    if options.unconditionalFitInSeparateJob and options.counter == options.jobs:
@@ -88,13 +111,13 @@ def visualizeEnumeration( poiL ):
 
    numPoints = reduce( lambda x,y: x*y, [poiL.at(d).getBins() for d in range(poiL.getSize())] )
    for i in range( poiL.at(0).getBins()*poiL.at(1).getBins() ):
-      parametersNCube( poiL, i )
+      parametersNCube( poiL, i, options.reversedParameters, options.reorderParameters )
       numbers.SetBinContent( numbers.FindBin( poiL.at(0).getVal(), poiL.at(1).getVal() ), i )
       jobs.SetBinContent( jobs.FindBin( poiL.at(0).getVal(), poiL.at(1).getVal() ), int(float(i)/numPoints*options.jobs) )
 
    firstPoint,lastPoint = jobBins( numPoints )
    for i in range( firstPoint,lastPoint ):
-      parametersNCube( poiL, i )
+      parametersNCube( poiL, i, options.reversedParameters, options.reorderParameters )
       jobsMask.SetBinContent(
          jobsMask.FindBin( poiL.at(0).getVal(), poiL.at(1).getVal() ),
          1000
@@ -110,7 +133,7 @@ def visualizeEnumeration( poiL ):
    jobs.Draw("COL")
    jobsMask.Draw("BOX,SAME")
    jobs.Draw("TEXT,SAME")
-   canvas.SaveAs( "docImages/binEnumeration2D.png" )
+   canvas.SaveAs( "doc/images/binEnumeration2D.png" )
    canvas.Update()
    raw_input( "Press enter to continue ..." )
 
@@ -125,7 +148,7 @@ def minimize( nll ):
 
    msglevel = ROOT.RooMsgService.instance().globalKillBelow()
    if not options.verbose:
-      ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
+      ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.FATAL)
 
    minim = ROOT.RooMinimizer( nll )
    if not options.verbose:
@@ -133,7 +156,7 @@ def minimize( nll ):
    else:
       minim.setPrintLevel(1)
    minim.setStrategy(strat)
-   minim.optimizeConst(0)
+   minim.optimizeConst(options.minOptimizeConst)
 
    # Got to be very careful with SCAN. We have to allow for negative mu,
    # so large part of the space that is scanned produces log-eval errors.
@@ -186,16 +209,20 @@ def preFit( w, mc, nll ):
 
 
 
-
 def main():
+   if options.verbose:
+      print( "Given options: " )
+      print( options )
+   timeStart = time.time()
+
    ROOT.RooRandom.randomGenerator().SetSeed( 0 )
 
    f = ROOT.TFile.Open( options.input )
    w = f.Get( options.wsName )
    mc = w.obj( options.mcName )
    data = w.data( options.dataName )
-
-   helperModifyModelConfig.apply( options, w, mc )
+   
+   f,w,mc,data = helperModifyModelConfig.apply( options, f,w,mc,data )
 
    firstPOI = mc.GetParametersOfInterest().first()
    poiL = ROOT.RooArgList( mc.GetParametersOfInterest() )
@@ -206,12 +233,14 @@ def main():
 
 
    ##### Script starts here
-   
 
+   if not options.verbose:
+      ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.FATAL)
+   
    ROOT.RooAbsReal.defaultIntegratorConfig().method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D")
 
    ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Minimize")
-   ROOT.Math.MinimizerOptions.SetDefaultStrategy(1)
+   ROOT.Math.MinimizerOptions.SetDefaultStrategy(options.minStrategy)
    #ROOT.Math.MinimizerOptions.SetDefaultPrintLevel(1)
    ROOT.Math.MinimizerOptions.SetDefaultPrintLevel(-1)
    #ROOT.Math.MinimizerOptions.SetDefaultTolerance(0.0001)
@@ -222,12 +251,19 @@ def main():
       data, 
       ROOT.RooFit.CloneData(ROOT.kFALSE), 
       ROOT.RooFit.Constrain(params), 
-      #ROOT.RooFit.Offset(True),
+      ROOT.RooFit.Offset(options.enableOffset),
+   )
+   nllNoOffset = mc.GetPdf().createNLL(
+      data, 
+      ROOT.RooFit.CloneData(ROOT.kFALSE), 
+      ROOT.RooFit.Constrain(params), 
+      ROOT.RooFit.Offset(False),
    )
    nll.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
-   #nll.enableOffsetting( True )
-   #print( "Get NLL once. This first call sets the offset, so it is important that this happens when the parameters are at their initial values." )
-   #print( "nll = "+str( nll.getVal() ) )
+   nllNoOffset.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
+   if options.enableOffset:
+      print( "Get NLL once. This first call sets the offset, so it is important that this happens when the parameters are at their initial values." )
+      print( "nll = "+str( nll.getVal() ) )
 
 
       
@@ -267,20 +303,9 @@ def main():
       print( "--- unconditional fit ---" )
       preFit( w, mc, nll )
       minimize( nll )
-      print( "ucmles -- nll="+str(nll.getVal())+", "+", ".join( [poiL.at(p).GetName()+"="+str(poiL.at(p).getVal()) for p in range(poiL.getSize())] ) )
 
-   # conditional fits
-   for p in range( poiL.getSize() ): poiL.at(p).setConstant()
-   for i in range( firstPoint,lastPoint ):
-      parametersNCube( poiL, i )
-      print( "" )
-      print( "--- next point: "+str(i)+" ---" )
-      print( "Parameters Of Interest: "+str([ poiL.at(p).getVal() for p in range(poiL.getSize()) ]) )
-      preFit( w, mc, nll )
-      minimize( nll )
-      
       # build result line
-      result = "nll="+str(nll.getVal())+", "
+      result = "ucmles -- nll="+str(nllNoOffset.getVal())+", "
       # poi values
       result += ", ".join( [poiL.at(p).GetName()+"="+str(poiL.at(p).getVal()) for p in range(poiL.getSize())] )
       # nuisance parameter values if requested
@@ -288,6 +313,35 @@ def main():
          result += ", "
          result += ", ".join( [nuisL.at(p).GetName()+"="+str(nuisL.at(p).getVal()) for p in range(nuisL.getSize())] )
       print( result )
+
+      f,w,mc,data = helperModifyModelConfig.callHooks( options, f,w,mc,data, type="postUnconditionalFit" )
+
+
+   # conditional fits
+   for p in range( poiL.getSize() ): poiL.at(p).setConstant()
+   for i in range( firstPoint,lastPoint ):
+      parametersNCube( poiL, i, options.reversedParameters, options.reorderParameters )
+      print( "" )
+      print( "--- next point: "+str(i)+" ---" )
+      print( "Parameters Of Interest: "+str([ poiL.at(p).getVal() for p in range(poiL.getSize()) ]) )
+      preFit( w, mc, nll )
+      nllVal = nllNoOffset.getVal()
+      if options.skipOnInvalidNll and (nllVal > 1e30  or  nllVal != nllVal):
+         print( "WARNING: nll value invalid. Skipping minimization was requested." )
+      else:
+         minimize( nll )
+      
+      # build result line
+      result = "nll="+str(nllNoOffset.getVal())+", "
+      # poi values
+      result += ", ".join( [poiL.at(p).GetName()+"="+str(poiL.at(p).getVal()) for p in range(poiL.getSize())] )
+      # nuisance parameter values if requested
+      if options.printAllNuisanceParameters:
+         result += ", "
+         result += ", ".join( [nuisL.at(p).GetName()+"="+str(nuisL.at(p).getVal()) for p in range(nuisL.getSize())] )
+      print( result )
+      
+   print( "\nDone. Time=%.1fs." % (time.time()-timeStart) )
       
 
 
