@@ -40,6 +40,13 @@ void FrequentistCalculator::PostHook() const {
 
 int FrequentistCalculator::PreNullHook(RooArgSet *parameterPoint, double obsTestStat) const {
 
+   // skip this if zero toys
+   if( dynamic_cast<ToyMCSampler*>(GetTestStatSampler())  &&  fNToysNull == 0 ) {
+      oocoutI((TObject*)0,InputArguments) << "Skipping Null because zero toys requested." << endl;
+      dynamic_cast<ToyMCSampler*>(GetTestStatSampler())->SetNToys( 0 );
+      return 0;
+   }
+
    // ****** any TestStatSampler ********
 
    // create profile keeping everything but nuisance parameters fixed
@@ -138,6 +145,13 @@ int FrequentistCalculator::PreNullHook(RooArgSet *parameterPoint, double obsTest
 
 
 int FrequentistCalculator::PreAltHook(RooArgSet *parameterPoint, double obsTestStat) const {
+
+   // skip this if zero toys
+   if( dynamic_cast<ToyMCSampler*>(GetTestStatSampler())  &&  fNToysAlt == 0 ) {
+      oocoutI((TObject*)0,InputArguments) << "Skipping Alt because zero toys requested." << endl;
+      dynamic_cast<ToyMCSampler*>(GetTestStatSampler())->SetNToys( 0 );
+      return 0;
+   }
 
    // ****** any TestStatSampler ********
 

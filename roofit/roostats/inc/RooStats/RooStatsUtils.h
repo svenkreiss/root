@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: RooStatsUtils.h 47012 2012-11-02 16:06:59Z moneta $
 // Author: Kyle Cranmer   28/07/2008
 
 /*************************************************************************
@@ -32,6 +32,8 @@
 #include "RooProdPdf.h"
 #include "RooDataSet.h"
 
+#include "TH1.h"
+#include "TH2.h"
 
 namespace RooStats {
 
@@ -123,6 +125,24 @@ namespace RooStats {
    // Create a TTree with the given name and description. All RooRealVars in the RooDataSet are represented as branches that contain values of type Double_t.
    TTree* GetAsTTree(TString name, TString desc, const RooDataSet& data);
 
+   // Return the contour level for this histogram that will create the 
+   // highest-probability-density interval for this integralValue.
+   double ContourLevelHPD( TH1* h, double integralValue );      
+   // h1 and h2 are histograms with equal shapes. h1 is overwritten with the
+   // minimum between h1 and h2 in each bin.
+   void HistMin( TH1* h1, TH1* h2 );
+   // 1D rebinning that does not average or sum, but take the minimum value
+   // for the merged bin.
+   TH1D* RebinHist1DMin( TH1* h, int rebin );
+   // 2D rebinning that does not average or sum, but take the minimum value
+   // for the merged bin.
+   TH2D* RebinHist2DMin( TH2* h, int rebin );
+   // Transformation to return a histogram of maximum Likelihoods from a
+   // histograms of NLLs.
+   TH1* MaxLFromNLLHist( TH1* nllHist );
+
+   TH1* ProfileMinOntoX( TH2& h2, bool subtractMin = false );
+   TH1* ProfileMinOntoY( TH2& h2, bool subtractMin = false );
 }
 
 

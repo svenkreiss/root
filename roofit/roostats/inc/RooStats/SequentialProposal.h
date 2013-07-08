@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: SequentialProposal.h 39455 2011-05-27 13:12:20Z moneta $
 // Authors: Giovanni Petrucciani 4/21/2011
 /*************************************************************************
  * Copyright (C) 1995-2008, Rene Brun and Fons Rademakers.               *
@@ -28,7 +28,8 @@ class SequentialProposal : public ProposalFunction {
 
    public:
    SequentialProposal() : RooStats::ProposalFunction(), fDivisor(0) {}
-      SequentialProposal(double divisor) ;
+      SequentialProposal(double divisor);
+      SequentialProposal(double divisor, const RooArgSet& importantVariables, int importanceFactor);
 
       // Populate xPrime with a new proposed point
       virtual void Propose(RooArgSet& xPrime, RooArgSet& x);
@@ -47,8 +48,10 @@ class SequentialProposal : public ProposalFunction {
       ClassDef(SequentialProposal,1) // A concrete implementation of ProposalFunction, that uniformly samples the parameter space.
 
     private:
-
       double fDivisor;
+
+      const RooArgSet* fImportantVariables;
+      int fImportanceFactor;
 };
 
 } 

@@ -1,4 +1,4 @@
-// @(#)root/roostats:$Id$
+// @(#)root/roostats:$Id: RooStatsUtils.cxx 47705 2012-11-29 14:37:50Z moneta $
 // Author: Kyle Cranmer   28/07/2008
 
 /*************************************************************************
@@ -270,5 +270,219 @@ namespace RooStats {
       FillTree(*myTree, data);
       return myTree;
    }
+   
+   TH1* ProfileMinOntoX( TH2& h2, bool subtractMin ) {
+      // create a 1D histogram with proper name and title
+      TString profileName( h2.GetName() );
+      profileName += "_profileOntoX";
+      TString profileTitle( h2.GetTitle() );
+      profileTitle += " profile onto x-axis";
+      TH1* h1 = new TH1D( profileName, profileTitle, h2.GetNbinsX(), h2.GetXaxis()->GetXmin(), h2.GetXaxis()->GetXmax() );
+      
+      // initialize to the maximum of the 2D hist
+      for( int x=0; x < h1->GetNbinsX()+2; x++ ) h1->SetBinContent( x, h2.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int x=0; x < h2.GetNbinsX()+2; x++ ) {
+         for( int y=0; y < h2.GetNbinsY()+2; y++ ) {
+            int binNumber2D = x + y*(h2.GetNbinsX()+2);
+            
+            // profiling
+            if( h1->GetBinContent(x) > h2.GetBinContent(binNumber2D) ) {
+               h1->SetBinContent( x, h2.GetBinContent(binNumber2D) );
+            }
+         }
+      }
+      
+      if( subtractMin ) {
+         for( int x=0; x < h1->GetNbinsX()+2; x++ ) {
+            h1->SetBinContent( x, h1->GetBinContent(x) - h1->GetMinimum() );
+         }
+      }
+      
+      return h1;
+   }
+   TH1* ProfileMinOntoY( TH2& h2, bool subtractMin ) {
+      // create a 1D histogram with proper name and title
+      TString profileName( h2.GetName() );
+      profileName += "_profileOntoY";
+      TString profileTitle( h2.GetTitle() );
+      profileTitle += " profile onto y-axis";
+      TH1* h1 = new TH1D( profileName, profileTitle, h2.GetNbinsY(), h2.GetYaxis()->GetXmin(), h2.GetYaxis()->GetXmax() );
+      
+      // initialize to the maximum of the 2D hist
+      for( int x=0; x < h1->GetNbinsX()+2; x++ ) h1->SetBinContent( x, h2.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int y=0; y < h2.GetNbinsY()+2; y++ ) {
+         for( int x=0; x < h2.GetNbinsX()+2; x++ ) {
+            int binNumber2D = x + y*(h2.GetNbinsX()+2);
+            
+            // profiling
+            if( h1->GetBinContent(y) > h2.GetBinContent(binNumber2D) ) {
+               h1->SetBinContent( y, h2.GetBinContent(binNumber2D) );
+            }
+         }
+      }
+      
+      if( subtractMin ) {
+         for( int x=0; x < h1->GetNbinsX()+2; x++ ) {
+            h1->SetBinContent( x, h1->GetBinContent(x) - h1->GetMinimum() );
+         }
+      }
+      
+      return h1;
+   }
 
+
+   double ContourLevelHPD( TH1* h, double integralValue ) {
+      int numBins = h->GetNbinsX()+2;
+      if( h->GetNbinsY() > 1 ) numBins *= h->GetNbinsY()+2;
+      if( h->GetNbinsZ() > 1 ) numBins *= h->GetNbinsZ()+2;
+   
+      std::vector<double> bins;
+      for( int i=0; i < numBins; i++ ) bins.push_back( h->GetBinContent(i) ); 
+      std::sort( bins.begin(), bins.end(), std::greater<double>() );  // reverse sort using std::greater<>()
+
+      double integral = h->Integral();   
+      double cumulative = 0.0;
+      for( std::vector<double>::iterator b=bins.begin(); b != bins.end(); b++ ) {
+         cumulative += (*b)/integral;
+         if( cumulative >= integralValue ) return *b;
+      }
+   
+      return 0.0;
+   }
+
+   void HistMin( TH1* h1, TH1* h2 ) {
+      int numBins1 = h1->GetNbinsX()+2;
+      if( h1->GetNbinsY() > 1 ) numBins1 *= h1->GetNbinsY()+2;
+      if( h1->GetNbinsZ() > 1 ) numBins1 *= h1->GetNbinsZ()+2;
+      int numBins2 = h2->GetNbinsX()+2;
+      if( h2->GetNbinsY() > 1 ) numBins2 *= h2->GetNbinsY()+2;
+      if( h2->GetNbinsZ() > 1 ) numBins2 *= h2->GetNbinsZ()+2;
+   
+      if( numBins2 != numBins1 ) {
+         std::cout << "ERROR HistMin(): histograms need to have the same dimensions." << std::endl; 
+         return;
+      }
+   
+      // Assume maximum in each histogram corresponds to unset bins.
+      // Therefore, raise max to the max of both histograms.
+      if( h1->GetMaximum() > h2->GetMaximum() ) {
+         double h2OldMax = h2->GetMaximum();
+         for( int i=0; i < numBins2; i++ ) {
+            if( h2->GetBinContent(i) == h2OldMax ) h2->SetBinContent( i, h1->GetMaximum() );
+         }
+      }else{
+         double h1OldMax = h1->GetMaximum();
+         for( int i=0; i < numBins2; i++ ) {
+            if( h1->GetBinContent(i) == h1OldMax ) h1->SetBinContent( i, h2->GetMaximum() );
+         }
+      }
+   
+      for( int i=0; i < numBins1; i++ ) {
+         if( h2->GetBinContent(i) < h1->GetBinContent(i) ) {
+            h1->SetBinContent( i, h2->GetBinContent(i) );
+         }
+      }
+   }
+
+   TH1D* RebinHist1DMin( TH1* h, int rebin ) {
+      TH1D* hRebinned = new TH1D( 
+         h->GetName(), h->GetTitle(),
+         h->GetNbinsX()/rebin, h->GetXaxis()->GetXmin(), h->GetXaxis()->GetXmax()
+      );
+   
+      // nothing is smaller than min, so use min-1.0 as place holder for empty
+      double minOrig = h->GetMinimum();
+      for( int i=0; i < hRebinned->GetNbinsX()+2; i++ ) {
+         hRebinned->SetBinContent( i, minOrig-1.0 );
+      }
+
+      for( int x=0; x < h->GetNbinsX(); x++ ) {
+         //int xRebinned = floor(x/rebin);
+         int bin = x+1;
+         int binRebinned = hRebinned->FindBin( h->GetBinCenter(bin) ); //xRebinned+1;
+         if( h->GetBinContent(bin) < hRebinned->GetBinContent(binRebinned) ||
+             hRebinned->GetBinContent(binRebinned) == minOrig-1.0
+         ) {
+            hRebinned->SetBinContent( binRebinned, h->GetBinContent(bin) );
+         }
+      }
+
+      for( int i=0; i < hRebinned->GetNbinsX()+2; i++ ) {
+         if( hRebinned->GetBinContent(i) == minOrig-1.0 ) {
+            hRebinned->SetBinContent( i, hRebinned->GetMaximum() );
+         }
+      }
+
+      return hRebinned;   
+   }
+
+   TH2D* RebinHist2DMin( TH2* h, int rebin ) {
+      TH2D* hRebinned = new TH2D( 
+         TString(h->GetName())+"_rebinned", h->GetTitle(),
+         h->GetNbinsX()/rebin, h->GetXaxis()->GetXmin(), h->GetXaxis()->GetXmax(),
+         h->GetNbinsY()/rebin, h->GetYaxis()->GetXmin(), h->GetYaxis()->GetXmax()
+      );
+   
+      // nothing is smaller than min, so use min-1.0 as place holder for empty
+      double minOrig = h->GetMinimum();
+      for( int i=0; i < (hRebinned->GetNbinsX()+2)*(hRebinned->GetNbinsY()+2); i++ ) {
+         hRebinned->SetBinContent( i, minOrig-1.0 );
+      }
+
+      for( int x=0; x < h->GetNbinsX(); x++ ) {
+         for( int y=0; y < h->GetNbinsY(); y++ ) {
+            int xRebinned = x/rebin;
+            int yRebinned = y/rebin;
+            int bin = (y+1)*(h->GetNbinsY()+2) + (x+1);
+            int binRebinned = (yRebinned+1)*(hRebinned->GetNbinsY()+2) + (xRebinned+1);
+            if( h->GetBinContent(bin) < hRebinned->GetBinContent(binRebinned) ||
+                hRebinned->GetBinContent(binRebinned) == minOrig-1.0
+            ) {
+               hRebinned->SetBinContent( binRebinned, h->GetBinContent(bin) );
+            }
+         }
+      }
+
+      for( int i=0; i < (hRebinned->GetNbinsX()+2)*(hRebinned->GetNbinsY()+2); i++ ) {
+         if( hRebinned->GetBinContent(i) == minOrig-1.0 ) {
+            hRebinned->SetBinContent( i, hRebinned->GetMaximum() );
+         }
+      }
+
+      return hRebinned;   
+   }
+
+
+   TH1* MaxLFromNLLHist( TH1* nllHist ) {
+      TString maxLName( "maxLHist2D_" );
+      maxLName += nllHist->GetName();
+   
+      TH1* maxLHist = (TH1*)nllHist->Clone( maxLName );
+   
+      maxLHist->SetTitle( "Maximum Likelihood per Bin (subtracted)" );
+      if( maxLHist->GetDimension() == 1 )
+         maxLHist->GetYaxis()->SetTitle( "Maximum Likelihood per Bin (subtracted)" );
+      else if( maxLHist->GetDimension() == 2 )
+         maxLHist->GetZaxis()->SetTitle( "Maximum Likelihood per Bin (subtracted)" );
+      else
+         cout << "WARNING: not sure what to do with this histogram." << endl;
+
+      int numBins = maxLHist->GetNbinsX()+2;
+      if( maxLHist->GetDimension() >= 2 ) numBins *= maxLHist->GetNbinsY()+2;
+      if( maxLHist->GetDimension() >= 3 ) numBins *= maxLHist->GetNbinsZ()+2;
+      double minNLL = maxLHist->GetMinimum();
+      for( int i=0; i < numBins; i++ ) {
+         double newVal = exp(- (maxLHist->GetBinContent(i)-minNLL));
+         //cout << "nll = " << h->GetBinContent(i) << "   L = " << newVal << endl;
+         maxLHist->SetBinContent( i, newVal );
+      }
+
+      return maxLHist;
+   }
+   
+   
 }
