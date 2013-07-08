@@ -5,11 +5,13 @@ __version__ = "0.1"
 
 
 
-import os,re,glob,optparse
+import os,re,optparse
 
 
-parser = optparse.OptionParser(usage="%prog", version="%prog 0.1")
-parser.add_option("-i", "--input", help="root file with impsampl", dest="input", default="ToysOutput.root" )
+parser = optparse.OptionParser(usage="%prog inputRootFiles [options]", version="%prog 0.1", description="""
+Plots the merged detailed outputs in the root files given as inputRootFiles.
+By default, all output is written to the directory ToysOutput/.
+""")
 parser.add_option("-w", "--workspace", help="workspace name", dest="workspace", default="ToysOutput" )
 parser.add_option("-r", "--hypoTestResult", help="hypoTestResult name", dest="hypoTestResult", default="HypoTestCalculator_result" )
 parser.add_option("-o", "--output", help="pdf file with impsampl output", dest="output", default="ToysOutput/" )
@@ -18,9 +20,9 @@ parser.add_option(      "--fits", help="an output for minos.py", dest="fits", de
 
 parser.add_option(      "--ymin", help="p value low y range", type="float", dest="ymin", default=5e-8)
 parser.add_option(      "--ymax", help="p value max y range", type="float", dest="ymax", default=50)
-parser.add_option(      "--xmin", help="xmin", type="float", dest="xmin", default=-1.5)
+parser.add_option(      "--xmin", help="xmin", type="float", dest="xmin", default=-6.5)
 parser.add_option(      "--xmax", help="xmax", type="float", dest="xmax", default=13.5)
-parser.add_option(      "--bins", help="bins for sampling distribution plots", type="int", dest="bins", default=60)
+parser.add_option(      "--bins", help="bins for sampling distribution plots", type="int", dest="bins", default=80)
 parser.add_option(      "--dof", help="Specify degrees-of-freedom for asym distributions.", type="int", dest="dof", default=1)
 parser.add_option(      "--twoSided", help="If the test is two sided. Default is one sided.", dest="twoSided", default=False, action="store_true")
 parser.add_option("-q", "--quiet", action="store_false", dest="verbose", default=True,
@@ -34,20 +36,24 @@ os.system( "rm "+options.output+"*.eps" )
 
 
 import ROOT
-import AtlasStyle
-import AtlasUtil
+import helperStyle 
 
 ROOT.gROOT.SetBatch( True )
 ROOT.gStyle.SetPalette(1)
 
 
+def getNames( rooabscollection ):
+   c = ROOT.RooArgList( rooabscollection )
+   names = []
+   for i in range( c.getSize() ):
+      names.append( c.at(i).GetName() )
+   return names
 
 
 class HtrPlotMaker:
-   def __init__( self, filename, wName, htrName ):
-      files = glob.glob( filename )
+   def __init__( self, filenames, wName, htrName ):
       self.htr = None
-      for fName in files:
+      for fName in filenames:
          print( "Opening "+fName )
          f = ROOT.TFile.Open( fName )
          w = f.Get( wName )
@@ -72,6 +78,9 @@ class HtrPlotMaker:
 
       # look at full output
       fullResult = htr.GetNullDetailedOutput()
+      if not fullResult: 
+         print( "ERROR: Please rerun toys with detailed output enabled: --detailedOutput" )
+         return
       fullResult.Print("v")
    
       l = ROOT.RooArgList( fullResult.get() )
@@ -96,7 +105,7 @@ class HtrPlotMaker:
       fullResult.fillHistogram( hAll, ROOT.RooArgList(l.at(0),"tmpList") )
       normalization = hAll.Integral( "width" )
 
-      if "densityLabel" in fullResult.get():
+      if "densityLabel" in getNames( fullResult.get() ):
          densityLabels = fullResult.get()["densityLabel"]
          for i in range( -1, 100 ):
             if densityLabels.setIndex( i ): break
@@ -271,5 +280,5 @@ class HtrPlotMaker:
       
 
 if __name__ == "__main__":
-   p = HtrPlotMaker( options.input, options.workspace, options.hypoTestResult )
+   p = HtrPlotMaker( args, options.workspace, options.hypoTestResult )
    p.drawHtr()

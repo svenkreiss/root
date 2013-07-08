@@ -12,9 +12,14 @@ def addOptionsToOptParse( parser ):
    parser.add_option(      "--loadSnapshots", help="loads this comma separated list of snapshots", dest="loadSnapshots", default=None )
 
    # for modifications
+   parser.add_option(      "--setConstant", help="Set comma separated list of parameters to constant. Example: \"mu=1,mH=125\".", dest="setConstant", default=False )   
+   parser.add_option(      "--setFloating", help="Set comma separated list of parameters to floating. Example: \"mu=1,mH=125\".", dest="setFloating", default=False )   
    parser.add_option(      "--overwritePOI", help="Force to take comma separated list of parameters with value for poi. Example: \"mu=1,mH=125\" will make these two the poi.", dest="overwritePOI", default=False )
    parser.add_option(      "--overwriteRange", help="Overwrite range. Example: \"mu=[-5:10],mH=[120:130]\".", dest="overwriteRange", default=False )
    parser.add_option(      "--overwriteBins", help="Overwrite bins. Example: \"mu=5,mH=100\".", dest="overwriteBins", default=False )
+   
+   # for plugins
+   parser.add_option(      "--plugins", help="comma separated list of plugins", dest="plugins", default=None )
 
 
 
@@ -31,8 +36,32 @@ def varsDictFromString( str ):
    return vars
 
 
-def apply( options, w, mc ):
+def callHooks( options, f,w,mc,data, type ):
+   if not options.plugins: return (f,w,mc,data)
+   
+   print( "" )
+
+   for pName in options.plugins.split(","):
+      try:
+         plugin = __import__( pName )
+         if hasattr( plugin,type ):
+            print( '--- Plugin "'+pName+'": '+type+'() ---' )
+            r = getattr( plugin,type )( f,w,mc,data )
+            if r: f,w,mc,data = r
+         else:
+            print( '--- Plugin "'+pName+'" does not contain '+type+'() ---' )
+      except ImportError:
+         print( "ERROR: Did not find plugin: "+str(pName) )
+
+   print( "" )
+   return (f,w,mc,data)
+
+
+
+def apply( options, f,w,mc,data ):
    """ Todo: use varsDictFromString() here. """
+
+   f,w,mc,data = callHooks( options, f,w,mc,data, type="preprocess" )
 
    if options.overwriteRange:
       parAndRange = options.overwriteRange.split(",")
@@ -52,6 +81,28 @@ def apply( options, w, mc ):
          print( "Setting number of bins for "+p+"="+str(b) )
          w.var( p ).setBins( int(b) )
 
+   if options.setConstant:
+      parAndValue = options.setConstant.split(",")
+      for pv in parAndValue:
+         name,value = pv.split("=")
+         if w.var(name):
+            w.var(name).setVal( float(value) )
+            w.var(name).setConstant()
+            print( "Variable "+name+" set constant at value "+str(value)+"." )
+         else:
+            print( "Variable "+name+" not found and not set constant." )
+
+   if options.setFloating:
+      parAndValue = options.setFloating.split(",")
+      for pv in parAndValue:
+         name,value = pv.split("=")
+         if w.var(name):
+            w.var(name).setVal( float(value) )
+            w.var(name).setConstant(False)
+            print( "Variable "+name+" set floating with initial value "+str(value)+"." )
+         else:
+            print( "Variable "+name+" not found and not set floating." )
+
    if options.overwritePOI:
       print( "" )
       print( "=== Using given set for POI ===" )
@@ -66,7 +117,7 @@ def apply( options, w, mc ):
       for p in range( poiL.getSize() ):
          name = poiL.at(p).GetName()
          if name not in poiAndValue.keys():
-            print( "Adding "+name+"["+str(poiL.at(p).getMin())+","+str(poiL.at(p).getMax())+"] to nuisance parameters." )
+            print( "Adding "+name+"["+str(poiL.at(p).getMin())+","+str(poiL.at(p).getMax())+"]="+str(poiL.at(p).getVal())+{True:' C', False:''}[poiL.at(p).isConstant()]+" to nuisance parameters." )
             w.set( mc.GetName()+"_NuisParams" ).add( poiL.at(p) )
             remove.append( name )
 #          else:
@@ -100,6 +151,7 @@ def apply( options, w, mc ):
          print( "Loading snapshot "+s+" ..." )
          w.loadSnapshot( s )
          print( "done." )
-      
+               
+   return (f,w,mc,data)
       
 
