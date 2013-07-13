@@ -36,7 +36,7 @@ public:
   //  Measurement( const Measurement& other ); // Copy
   Measurement(const char* Name, const char* Title="");
 
-  //  std::string Name;
+  //virtual Measurement* Clone(void) { return new Measurement(*this); }
 
 
   void SetOutputFilePrefix( const std::string& prefix ) { fOutputFilePrefix = prefix; }

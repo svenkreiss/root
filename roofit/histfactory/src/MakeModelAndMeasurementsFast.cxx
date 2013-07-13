@@ -228,23 +228,23 @@ RooWorkspace* RooStats::HistFactory::MakeModelAndMeasurementFast( RooStats::Hist
     ***/
 
 
-    for( unsigned int chanItr = 0; chanItr < measurement.GetChannels().size(); ++chanItr ) {
+    for( unsigned int chanItr = 0; chanItr < measurement.GetChannelsPtr().size(); ++chanItr ) {
     
-      HistFactory::Channel& channel = measurement.GetChannels().at( chanItr );
+      HistFactory::Channel* channel = measurement.GetChannelsPtr().at( chanItr );
 
-      if( ! channel.CheckHistograms() ) {
-	std::cout << "MakeModelAndMeasurementsFast: Channel: " << channel.GetName()
+      if( ! channel->CheckHistograms() ) {
+	std::cout << "MakeModelAndMeasurementsFast: Channel: " << channel->GetName()
 		  << " has uninitialized histogram pointers" << std::endl;
 	throw hf_exc();
 	return NULL;
       }
 
-      string ch_name = channel.GetName();
+      string ch_name = channel->GetName();
       channel_names.push_back(ch_name);
 
       std::cout << "Starting to process channel: " << ch_name << std::endl;
 
-      RooWorkspace* ws_single = factory.MakeSingleChannelModel( measurement, channel );
+      RooWorkspace* ws_single = factory.MakeSingleChannelModel( measurement, *channel );
 
       channel_workspaces.push_back(ws_single);
 
@@ -258,15 +258,16 @@ RooWorkspace* RooStats::HistFactory::MakeModelAndMeasurementFast( RooStats::Hist
     
       // Now, write the measurement to the file
       // Make a new measurement for only this channel
-      RooStats::HistFactory::Measurement meas_chan( measurement );
-      meas_chan.GetChannels().clear();
-      meas_chan.GetChannels().push_back( channel );
+      RooStats::HistFactory::Measurement* meas_chan = (HistFactory::Measurement*)measurement.Clone();
+      meas_chan->GetChannelsPtr().clear();
+      meas_chan->GetChannelsPtr().push_back( channel );
       std::cout << "Opening File to hold channel: " << ChannelFileName << std::endl;
       TFile* chanFile = TFile::Open( ChannelFileName.c_str(), "UPDATE" );
       std::cout << "About to write channel measurement to file" << std::endl;
-      meas_chan.writeToFile( chanFile );
+      meas_chan->writeToFile( chanFile );
       std::cout << "Successfully wrote channel to file" << std::endl;
       chanFile->Close();
+      delete meas_chan;
 
       // do fit unless exportOnly requested
       if(! measurement.GetExportOnly()){

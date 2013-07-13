@@ -31,6 +31,8 @@ public:
 
   Channel();
   Channel(std::string Name, std::string InputFile="");
+
+  virtual ~Channel() {}
   
 
   void SetName( const std::string& Name ) { fName = Name; }

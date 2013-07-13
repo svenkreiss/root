@@ -280,21 +280,21 @@ namespace HistFactory{
     vector<RooWorkspace*> channel_workspaces;
     vector<string>        channel_names;
     
-    for( unsigned int chanItr = 0; chanItr < measurement.GetChannels().size(); ++chanItr ) {
+    for( unsigned int chanItr = 0; chanItr < measurement.GetChannelsPtr().size(); ++chanItr ) {
     
-      HistFactory::Channel& channel = measurement.GetChannels().at( chanItr );
+      HistFactory::Channel* channel = measurement.GetChannelsPtr().at( chanItr );
 
-      if( ! channel.CheckHistograms() ) {
-	std::cout << "MakeModelAndMeasurementsFast: Channel: " << channel.GetName()
+      if( ! channel->CheckHistograms() ) {
+	std::cout << "MakeModelAndMeasurementsFast: Channel: " << channel->GetName()
 		  << " has uninitialized histogram pointers" << std::endl;
 	throw hf_exc();
       }
 
-      string ch_name = channel.GetName();
+      string ch_name = channel->GetName();
       channel_names.push_back(ch_name);
 
       // GHL: Renaming to 'MakeSingleChannelWorkspace'
-      RooWorkspace* ws_single = factory.MakeSingleChannelModel( measurement, channel );
+      RooWorkspace* ws_single = factory.MakeSingleChannelModel( measurement, *channel );
       
       channel_workspaces.push_back(ws_single);
 

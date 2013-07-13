@@ -214,18 +214,18 @@ void topDriver( string input ) {
 
     // read the xml for each channel and combine
 
-    for( unsigned int chanItr = 0; chanItr < measurement->GetChannels().size(); ++chanItr ) {
+    for( unsigned int chanItr = 0; chanItr < measurement->GetChannelsPtr().size(); ++chanItr ) {
 
-      HistFactory::Channel& channel = measurement->GetChannels().at( chanItr );
+      HistFactory::Channel* channel = measurement->GetChannelsPtr().at( chanItr );
 
 
-      string ch_name=channel.GetName();
+      string ch_name=channel->GetName();
       channel_names.push_back(ch_name);
 
       std::vector< EstimateSummary > dummy;
       RooWorkspace* ws = factory.MakeSingleChannelModel( dummy, measurement->GetConstantParams() );
       if( ws==NULL ) {
-	std::cout << "Failed to create SingleChannelModel for channel: " << channel.GetName()
+	std::cout << "Failed to create SingleChannelModel for channel: " << channel->GetName()
 		  << " and measurement: " << measurement->GetName() << std::endl;
 	throw hf_exc();
       }
@@ -261,9 +261,9 @@ void topDriver( string input ) {
       
       // Now, write the measurement to the file
       // Make a new measurement for only this channel
-      RooStats::HistFactory::Measurement* meas_chan = new RooStats::HistFactory::Measurement( *measurement );
-      meas_chan->GetChannels().clear();
-      meas_chan->GetChannels().push_back( channel );
+      RooStats::HistFactory::Measurement* meas_chan = (RooStats::HistFactory::Measurement*)measurement->Clone();
+      meas_chan->GetChannelsPtr().clear();
+      meas_chan->GetChannelsPtr().push_back( channel );
       TFile* chanFile = TFile::Open( ChannelFileName.c_str(), "UPDATE" );
       meas_chan->writeToFile( chanFile );
       chanFile->Close();
