@@ -169,7 +169,7 @@ class Graph( ROOT.TGraph ):
    def add( self, term ):
       self.transformY( lambda y: y+term )
    
-   def integral( self ):
+   def integral( self, min=None, max=None ):
       """ Calculate integral using trapezoidal rule. """
       integral = 0.0
       for i in range( 1, self.GetN() ):
@@ -178,7 +178,18 @@ class Graph( ROOT.TGraph ):
          self.GetPoint( i-1, previousPoint[0], previousPoint[1] )
          self.GetPoint( i, thisPoint[0], thisPoint[1] )
          
-         integral += (thisPoint[0]-previousPoint[0]) * (thisPoint[1]+previousPoint[1])/2.0
+         if min!=None  and  thisPoint[0] < min and previousPoint[0] < min: 
+            pass
+         elif min!=None  and  thisPoint[0] > min and previousPoint[0] < min: 
+            valueAtMin = previousPoint[1]  +  (min-previousPoint[0])*(thisPoint[1]-previousPoint[1])/(thisPoint[0]-previousPoint[0])
+            integral += (thisPoint[0]-min) * (thisPoint[1]+valueAtMin)/2.0
+         elif max!=None  and  thisPoint[0] > max and previousPoint[0] > max:
+            pass
+         elif max!=None  and  thisPoint[0] > max and previousPoint[0] < max: 
+            valueAtMax = previousPoint[1]  +  (max-previousPoint[0])*(thisPoint[1]-previousPoint[1])/(thisPoint[0]-previousPoint[0])
+            integral += (max-previousPoint[0]) * (valueAtMax+previousPoint[1])/2.0
+         else:
+            integral += (thisPoint[0]-previousPoint[0]) * (thisPoint[1]+previousPoint[1])/2.0
       return integral
       
       
