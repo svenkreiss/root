@@ -325,6 +325,7 @@ def main():
       print( "--- next point: "+str(i)+" ---" )
       print( "Parameters Of Interest: "+str([ poiL.at(p).getVal() for p in range(poiL.getSize()) ]) )
       preFit( w, mc, nll )
+      f,w,mc,data = helperModifyModelConfig.callHooks( options, f,w,mc,data, type="preConditionalFit" )
       nllVal = nllNoOffset.getVal()
       if options.skipOnInvalidNll and (nllVal > 1e30  or  nllVal != nllVal):
          print( "WARNING: nll value invalid. Skipping minimization was requested." )
