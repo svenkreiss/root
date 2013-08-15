@@ -8,6 +8,11 @@ of jobs (in this case 16).
 You can reproduce this with
 
 ```
+# prepare histfactory workspace area:
+#  creates folder structure and an example model
+prepareHistFactory
+hist2workspace config/example.xml
+
 python BatchProfileLikelihood.py --overwritePOI=SigXsecOverSM=1,alpha_syst2=0 --overwriteBins=SigXsecOverSM=6,alpha_syst2=10 -f -j 16 -c 14
 ```
 

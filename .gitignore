@@ -24,6 +24,7 @@ rootcint_*.h
 
 # Other Stuff
 *.d
+*.pyc
 
 # /
 /bin
