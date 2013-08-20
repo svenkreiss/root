@@ -18,6 +18,7 @@ parser.add_option("-q", "--quiet", dest="verbose", action="store_false", default
 (options, args) = parser.parse_args()
 
 import ROOT
+ROOT.gROOT.SetBatch( True )
 import PyROOTUtils
 
 import os, math
@@ -141,6 +142,7 @@ def main():
 
 
    nllHist = None
+   nuisHists = []
    tgs = []
    maxHist = maxNLL
    if options.subtractMinNLL: maxHist -= minNLL
@@ -180,6 +182,21 @@ def main():
       c = ROOT.TCanvas()
       tgs += getContours( nllHist, 1.15, "68TG", c )
       tgs += getContours( nllHist, 3.0,  "95TG", c )
+
+      # store the nuisance parameter values
+      nuisHists = []
+      for n in NUISs:
+         h = ROOT.TH2D(
+            "nuisPar_"+n[0], "value of "+n[0]+";"+poi1[0]+";"+poi2[0]+";nuisance parameter value",
+            int(poi1[1][0]), poi1[1][1], poi1[1][2],
+            int(poi2[1][0]), poi2[1][1], poi2[1][2],
+         )
+         for nVal,p1,p2 in zip(NLL[n[0]],NLL[poi1[0]],NLL[poi2[0]]):
+            bin = nllHist.FindBin( p1,p2 )
+            h.SetBinContent( bin, nVal )
+         nuisHists.append( h )
+
+
       
    if not nllHist:
       print( "ERROR: Couldn't create nll histogram." )
@@ -290,6 +307,8 @@ def main():
    nllHist.Write()
    for p,g in nllTGraphs.iteritems():
       if g: g.Write( "nll_"+p )
+   for h in nuisHists:
+      h.Write()
    for p,g in nuisParGraphs.iteritems():
       if g: g.Write( "nuisPar_"+p )
    for h in histos2d.values():
