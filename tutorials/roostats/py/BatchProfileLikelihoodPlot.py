@@ -187,7 +187,7 @@ def main():
       nuisHists = []
       for n in NUISs:
          h = ROOT.TH2D(
-            "nuisPar_"+n[0], "value of "+n[0]+";"+poi1[0]+";"+poi2[0]+";nuisance parameter value",
+            "nuisParValue_"+n[0], "value of "+n[0]+";"+poi1[0]+";"+poi2[0]+";nuisance parameter value",
             int(poi1[1][0]), poi1[1][1], poi1[1][2],
             int(poi2[1][0]), poi2[1][1], poi2[1][2],
          )
