@@ -34,6 +34,7 @@
 
 #include "TH1.h"
 #include "TH2.h"
+#include "TH3.h"
 
 namespace RooStats {
 
@@ -143,6 +144,10 @@ namespace RooStats {
 
    TH1* ProfileMinOntoX( TH2& h2, bool subtractMin = false );
    TH1* ProfileMinOntoY( TH2& h2, bool subtractMin = false );
+
+   TH2* ProfileMinOntoXY( TH3& h3, bool subtractMin = false );
+   TH2* ProfileMinOntoYZ( TH3& h3, bool subtractMin = false );
+   TH2* ProfileMinOntoXZ( TH3& h3, bool subtractMin = false );
 }
 
 
