@@ -833,7 +833,7 @@ Int_t TProofServ::CreateServer()
 
    if (!fLogFile) {
       RedirectOutput();
-      // If for some reason we failed setting a redirection fole for the logs
+      // If for some reason we failed setting a redirection file for the logs
       // we cannot continue
       if (!fLogFile || (fLogFileDes = fileno(fLogFile)) < 0) {
          LogToMaster();
@@ -1476,7 +1476,7 @@ Int_t TProofServ::HandleSocketInput(TMessage *mess, Bool_t all)
 {
    // Process input coming from the client or from the master server.
    // If 'all' is kFALSE, process only those messages that can be handled
-   // during qurey processing.
+   // during query processing.
    // Returns -1 if the message could not be processed, <-1 if something went
    // wrong. Returns 1 if the action may have changed the parallel state.
    // Returns 2 if the message has to be enqueued.
@@ -1648,6 +1648,23 @@ Int_t TProofServ::HandleSocketInput(TMessage *mess, Bool_t all)
             // The log file is send either in HandleProcess or HandleSubmergers.
             // The reason is that the order of various messages depend on the
             // processing mode (sync/async) and/or merging mode
+         }
+         break;
+
+      case kPROOF_SENDOUTPUT:
+         {
+            PDB(kGlobal, 1) Info("HandleSocketInput:kPROOF_SENDOUTPUT",
+                                 "worker was asked to send output to master");
+            Int_t sorc = 0;
+            if (SendResults(fSocket, fPlayer->GetOutputList()) != 0) {
+               Error("HandleSocketInput:kPROOF_SENDOUTPUT", "problems sending output list");
+               sorc = 1;
+            }
+            // Signal the master that we are idle
+            fSocket->Send(kPROOF_SETIDLE);
+            SetIdle(kTRUE);
+            DeletePlayer();
+            SendLogFile(sorc);
          }
          break;
 
@@ -1841,17 +1858,17 @@ Int_t TProofServ::HandleSocketInput(TMessage *mess, Bool_t all)
          } else {
             TProofServLogHandlerGuard hg(fLogFile, fSocket, "", fRealTimeLog);
             PDB(kGlobal, 1) Info("HandleSocketInput:kPROOF_CACHE","enter");
-            Int_t status = HandleCache(mess, pslb);
+            Int_t hcrc = HandleCache(mess, pslb);
             // Notify
-            SendLogFile(status);
+            SendLogFile(hcrc);
          }
          break;
 
       case kPROOF_WORKERLISTS:
-         {  Int_t xrc = -1;
+         {  Int_t wlrc = -1;
             if (all) {
                if (IsMaster())
-                  xrc = HandleWorkerLists(mess);
+                  wlrc = HandleWorkerLists(mess);
                else
                   Warning("HandleSocketInput:kPROOF_WORKERLISTS",
                         "Action meaning-less on worker nodes: protocol error?");
@@ -1859,7 +1876,7 @@ Int_t TProofServ::HandleSocketInput(TMessage *mess, Bool_t all)
                rc = -1;
             }
             // Notify
-            SendLogFile(xrc);
+            SendLogFile(wlrc);
          }
          break;
 
@@ -2016,13 +2033,13 @@ Int_t TProofServ::HandleSocketInput(TMessage *mess, Bool_t all)
          break;
 
       case kPROOF_DATASETS:
-         {  Int_t xrc = -1;
+         {  Int_t dsrc = -1;
             if (fProtocol > 16) {
-               xrc = HandleDataSets(mess, pslb);
+               dsrc = HandleDataSets(mess, pslb);
             } else {
                Error("HandleSocketInput", "old client: no or incompatible dataset support");
             }
-            SendLogFile(xrc);
+            SendLogFile(dsrc);
          }
          break;
 
@@ -2122,6 +2139,75 @@ Int_t TProofServ::HandleSocketInput(TMessage *mess, Bool_t all)
                SendAsynMessage("Processing request to go asynchronous:"
                                " idle or undefined player - ignoring");
             }
+         }
+         break;
+
+      case kPROOF_ECHO:
+         {  // Echo request: an object has been sent along. If the object is a
+            // string, it is simply echoed back to the client from the master
+            // and each worker. Elsewhere, the output of TObject::Print() is
+            // sent. Received object is disposed after usage.
+
+            TObject *obj = mess->ReadObject(0x0);  // class type ignored
+
+            if (IsMaster()) {
+               // We are on master
+               // dbTODO: forward on dynamic startup when wrks are up
+               if (IsParallel() && fProof && !fProof->UseDynamicStartup()) {
+                  fProof->Echo(obj);  // forward to lower layer
+               }
+            }
+
+            TMessage rmsg(kPROOF_MESSAGE);
+            TString smsg;
+
+            if (obj->InheritsFrom(TObjString::Class())) {
+               // It's a string: echo it
+               smsg.Form("Echo response from %s:%s: %s",
+                  gSystem->HostName(), GetOrdinal(),
+                  ((TObjString *)obj)->String().Data());
+            }
+            else {
+               // Not a string: collect Print() output and send it
+
+               // Output to tempfile
+               TString tmpfn = "echo-out-";
+               FILE *tf = gSystem->TempFileName(tmpfn, fDataDir);
+               if (!tf || (gSystem->RedirectOutput(tmpfn.Data()) == -1)) {
+                  Error("HandleSocketInput", "Can't redirect output");
+                  if (tf) {
+                     fclose(tf);
+                     gSystem->Unlink(tmpfn);
+                  }
+                  rc = -1;
+                  delete obj;
+                  break;
+               }
+               //cout << obj->ClassName() << endl;
+               obj->Print();
+               gSystem->RedirectOutput(0x0);  // restore
+               fclose(tf);
+
+               // Read file back and send it via message
+               smsg.Form("*** Echo response from %s:%s ***\n",
+                  gSystem->HostName(), GetOrdinal());
+               TMacro *fr = new TMacro();
+               fr->ReadFile(tmpfn);
+               TIter nextLine(fr->GetListOfLines());
+               TObjString *line;
+               while (( line = (TObjString *)nextLine() )) {
+                  smsg.Append( line->String() );
+               }
+
+               // Close the reader (TMacro) and remove file
+               delete fr;
+               gSystem->Unlink(tmpfn);
+            }
+
+            // Send message and dispose object
+            rmsg << smsg;
+            GetSocket()->Send(rmsg);
+            delete obj;
          }
          break;
 
@@ -2693,7 +2779,11 @@ void TProofServ::SendParallel(Bool_t async)
 
    Int_t nparallel = 0;
    if (IsMaster()) {
+      PDB(kGlobal, 2)
+         Info("SendParallel", "Will invoke AskParallel()");
       fProof->AskParallel();
+      PDB(kGlobal, 2)
+         Info("SendParallel", "Will invoke GetParallel()");
       nparallel = fProof->GetParallel();
    } else {
       nparallel = 1;
@@ -3225,11 +3315,13 @@ Int_t TProofServ::SetupCommon()
       // Dataset manager for staging requests
       TString dsReqCfg = gEnv->GetValue("Proof.DataSetStagingRequests", "");
       if (!dsReqCfg.IsNull()) {
-         TPMERegexp reReqDir("(^| )dir:([^ ]+)( |$)");
+         TPMERegexp reReqDir("(^| )(dir:)?([^ ]+)( |$)");
 
-         if (reReqDir.Match(dsReqCfg) == 4) {
+         if (reReqDir.Match(dsReqCfg) == 5) {
+            TString dsDirFmt;
+            dsDirFmt.Form("dir:%s perms:open", reReqDir[3].Data());
             fDataSetStgRepo = new TDataSetManagerFile("_stage_", "_stage_",
-              Form("dir:%s perms:open", reReqDir[2].Data()));
+               dsDirFmt);
             if (fDataSetStgRepo &&
                fDataSetStgRepo->TestBit(TObject::kInvalidObject)) {
                Warning("SetupCommon",
@@ -3238,7 +3330,7 @@ Int_t TProofServ::SetupCommon()
             }
          } else {
             Warning("SetupCommon",
-              "specify, with dir:<path>, a valid path for staging requests");
+              "specify, with [dir:]<path>, a valid path for staging requests");
          }
       } else if (gProofDebugLevel > 0) {
          Warning("SetupCommon", "no repository for staging requests available");
@@ -4068,61 +4160,103 @@ void TProofServ::HandleProcess(TMessage *mess, TString *slb)
       SafeDelete(enl);
       SafeDelete(evl);
 
-      // Check if we are in merging mode (i.e. parameter PROOF_UseMergers exists)
-      Bool_t isInMergingMode = kFALSE;
-      if (!(TestBit(TProofServ::kHighMemory))) {
-         Int_t nm = 0;
-         if (TProof::GetParameter(input, "PROOF_UseMergers", nm) == 0) {
-            isInMergingMode = (nm >= 0) ? kTRUE : kFALSE;
+      Bool_t outok = (fPlayer->GetExitStatus() != TVirtualProofPlayer::kAborted &&
+                        fPlayer->GetOutputList()) ? kTRUE : kFALSE;
+      if (outok) {
+         // Check if in controlled output sending mode
+         Int_t cso = gEnv->GetValue("Proof.ControlSendOutput", 1);
+         if (TProof::GetParameter(input, "PROOF_ControlSendOutput", cso) != 0)
+            cso = gEnv->GetValue("Proof.ControlSendOutput", 1);
+         if (cso > 0) {
+
+            // Control output sending mode: wait for the master to ask for the objects.
+            // Allows controls of memory usage on the master.
+            TMessage msg(kPROOF_SENDOUTPUT);
+            fSocket->Send(msg);
+
+            // Set idle
+            SetIdle(kTRUE);
+
+            // Do not cleanup the player yet: it will be used in sending output activities
+            deleteplayer = kFALSE;
+
+            PDB(kGlobal, 1)
+               Info("HandleProcess", "controlled mode: worker %s has finished,"
+                                     " sizes sent to master", fOrdinal.Data());
+         } else {
+
+
+            // Check if we are in merging mode (i.e. parameter PROOF_UseMergers exists)
+            Bool_t isInMergingMode = kFALSE;
+            if (!(TestBit(TProofServ::kHighMemory))) {
+               Int_t nm = 0;
+               if (TProof::GetParameter(input, "PROOF_UseMergers", nm) == 0) {
+                  isInMergingMode = (nm >= 0) ? kTRUE : kFALSE;
+               }
+            }
+            PDB(kGlobal, 2) Info("HandleProcess", "merging mode check: %d", isInMergingMode);
+
+            if (!IsMaster() && isInMergingMode) {
+               // Worker in merging mode.
+               //----------------------------
+               // First, it reports only the size of its output to the master
+               // + port on which it can possibly accept outputs from other workers if it becomes a merger
+               // Master will later tell it where it should send the output (either to the master or to some merger)
+               // or if it should become a merger
+
+               TMessage msg_osize(kPROOF_SUBMERGER);
+               msg_osize << Int_t(TProof::kOutputSize);
+               msg_osize << fPlayer->GetOutputList()->GetEntries();
+
+               fMergingSocket = new TServerSocket(0);
+               Int_t merge_port = 0;
+               if (fMergingSocket) {
+                  PDB(kGlobal, 2)
+                     Info("HandleProcess", "possible port for merging connections: %d",
+                                           fMergingSocket->GetLocalPort());
+                  merge_port = fMergingSocket->GetLocalPort();
+               }
+               msg_osize << merge_port;
+               fSocket->Send(msg_osize);
+
+               // Set idle
+               SetIdle(kTRUE);
+
+               // Do not cleanup the player yet: it will be used in sub-merging activities
+               deleteplayer = kFALSE;
+
+               PDB(kSubmerger, 2) Info("HandleProcess", "worker %s has finished", fOrdinal.Data());
+
+            } else {
+               // Sub-master OR worker not in merging mode
+               // ---------------------------------------------
+               PDB(kGlobal, 2)  Info("HandleProcess", "sending result directly to master");
+               if (SendResults(fSocket, fPlayer->GetOutputList()) != 0)
+                  Warning("HandleProcess","problems sending output list");
+
+               // Masters reset the mergers, if any
+               if (IsMaster()) fProof->ResetMergers();
+
+               // Signal the master that we are idle
+               fSocket->Send(kPROOF_SETIDLE);
+
+               // Set idle
+               SetIdle(kTRUE);
+
+               // Notify the user
+               SendLogFile();
+            }
+
+
+
          }
-      }
-      PDB(kGlobal, 2) Info("HandleProcess", "merging mode check: %d", isInMergingMode);
-
-      if (!IsMaster() && isInMergingMode &&
-          fPlayer->GetExitStatus() != TVirtualProofPlayer::kAborted && fPlayer->GetOutputList()) {
-         // Worker in merging mode.
-         //----------------------------
-         // First, it reports only the size of its output to the master
-         // + port on which it can possibly accept outputs from other workers if it becomes a merger
-         // Master will later tell it where it should send the output (either to the master or to some merger)
-         // or if it should become a merger
-
-         TMessage msg_osize(kPROOF_SUBMERGER);
-         msg_osize << Int_t(TProof::kOutputSize);
-         msg_osize << fPlayer->GetOutputList()->GetEntries();
-
-         fMergingSocket = new TServerSocket(0);
-         Int_t merge_port = 0;
-         if (fMergingSocket) {
-            PDB(kGlobal, 2)
-               Info("HandleProcess", "possible port for merging connections: %d",
-                                     fMergingSocket->GetLocalPort());
-            merge_port = fMergingSocket->GetLocalPort();
-         }
-         msg_osize << merge_port;
-         fSocket->Send(msg_osize);
-
-         // Set idle
-         SetIdle(kTRUE);
-
-         // Do not cleanup the player yet: it will be used in sub-merging activities
-         deleteplayer = kFALSE;
-
-         PDB(kSubmerger, 2) Info("HandleProcess", "worker %s has finished", fOrdinal.Data());
 
       } else {
-         // Sub-master OR worker not in merging mode
-         // ---------------------------------------------
-         if (fPlayer->GetExitStatus() != TVirtualProofPlayer::kAborted && fPlayer->GetOutputList()) {
-            PDB(kGlobal, 2)  Info("HandleProcess", "sending result directly to master");
-            if (SendResults(fSocket, fPlayer->GetOutputList()) != 0)
-               Warning("HandleProcess","problems sending output list");
-         } else {
-            if (fPlayer->GetExitStatus() != TVirtualProofPlayer::kAborted)
-               Warning("HandleProcess","the output list is empty!");
-            if (SendResults(fSocket) != 0)
-               Warning("HandleProcess", "problems sending output list");
-         }
+         // No output list
+         if (fPlayer->GetExitStatus() != TVirtualProofPlayer::kAborted)
+            Warning("HandleProcess","the output list is empty!");
+         if (SendResults(fSocket) != 0)
+            Warning("HandleProcess", "problems sending output list");
 
          // Masters reset the mergers, if any
          if (IsMaster()) fProof->ResetMergers();
@@ -6782,23 +6916,19 @@ Int_t TProofServ::HandleDataSets(TMessage *mess, TString *slb)
 
       case TProof::kStagingStatus:
          {
-            (*mess) >> uri;  // TString
-
             if (!fDataSetStgRepo) {
                Error("HandleDataSets",
                   "no dataset staging request repository available");
                return -1;
             }
 
-            // TODO what is slb?
-            //if (slb) slb->Form("%d %s %s", type, uri.Data(), opt.Data());
+            (*mess) >> uri;  // TString
 
             // Transform URI in a valid dataset name
-            TString validUri = uri;
-            while (reInvalid.Substitute(validUri, "_")) {}
+            while (reInvalid.Substitute(uri, "_")) {}
 
             // Get the list
-            TFileCollection *fc = fDataSetStgRepo->GetDataSet(validUri.Data());
+            TFileCollection *fc = fDataSetStgRepo->GetDataSet(uri.Data());
             if (fc) {
                fSocket->SendObject(fc, kMESS_OK);
                delete fc;
@@ -6807,9 +6937,29 @@ Int_t TProofServ::HandleDataSets(TMessage *mess, TString *slb)
             else {
                // No such dataset: not an error, but don't send message
                Info("HandleDataSets", "no pending staging request for %s",
-                  validUri.Data());
+                  uri.Data());
                return 0;
             }
+         }
+         break;
+
+      case TProof::kCancelStaging:
+         {
+            if (!fDataSetStgRepo) {
+               Error("HandleDataSets",
+                  "no dataset staging request repository available");
+               return -1;
+            }
+
+            (*mess) >> uri;
+
+            // Transform URI in a valid dataset name
+            while (reInvalid.Substitute(uri, "_")) {}
+
+            if (!fDataSetStgRepo->RemoveDataSet(uri.Data()))
+               return -1;  // failure
+
+            return 0;  // success
          }
          break;
 

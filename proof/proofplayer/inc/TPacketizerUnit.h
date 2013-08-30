@@ -49,29 +49,36 @@ public:              // public because of Sun CC bug
 private:
    TList      *fPackets;         // All processed packets
    TMap       *fWrkStats;        // Worker status, keyed by correspondig TSlave
+   TList      *fWrkExcluded;     // List of nodes excluded from distribution
+                                 // (submasters with no active workers)
    TStopwatch *fStopwatch;       // For measuring the start time of each packet
    Long64_t    fProcessing;      // Event being processed
    Long64_t    fAssigned;        // Entries processed or being processed.
    Double_t    fCalibFrac;       // Size of the calibrating packet as fraction of Ntot/Nwrk
    Long64_t    fNumPerWorker;    // Number of cycles per worker, if this option
                                  // is chosen
+   Bool_t      fFixedNum;        // Whether we must assign a fixed number of cycles per worker
 
    Long64_t    fPacketSeq;       // Sequential number of the last packet assigned
+   TList      *fInput;           // Input list
 
    TPacketizerUnit();
    TPacketizerUnit(const TPacketizerUnit&);     // no implementation, will generate
-   void operator=(const TPacketizerUnit&);  // error on accidental usage
+   void operator=(const TPacketizerUnit&);      // error on accidental usage
 
 public:
    TPacketizerUnit(TList *slaves, Long64_t num, TList *input, TProofProgressStatus *st = 0);
    virtual ~TPacketizerUnit();
 
+   Int_t         AssignWork(TDSet * /*dset*/, Long64_t /*first*/, Long64_t num);
    TDSetElement *GetNextPacket(TSlave *sl, TMessage *r);
 
    Double_t      GetCurrentTime();
 
    Float_t       GetCurrentRate(Bool_t &all);
    Int_t         GetActiveWorkers() { return fWrkStats->GetSize(); }
+
+   Int_t         AddWorkers(TList *workers);
 
    ClassDef(TPacketizerUnit,0)  //Generate work packets for parallel processing
 };

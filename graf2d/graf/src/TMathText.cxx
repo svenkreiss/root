@@ -25,7 +25,7 @@
 //______________________________________________________________________________
 /* Begin_Html
 <center><h2>TMathText : to draw TeX Mathematical Formula</h2></center>
- 
+
 TMathText's purpose is to write mathematical equations, exactly as TeX would
 do it. The syntax is the same as the TeX's one.
 <p>
@@ -46,9 +46,7 @@ Begin_Html
 End_Html
 */
 
-
 const Double_t kPI      = TMath::Pi();
-const Int_t kLatex      = BIT(10);
 
 class TMathTextRenderer : public TText, public TAttFill,
                           public mathtext::math_text_renderer_t {
@@ -269,6 +267,7 @@ public:
    bounding_box(const std::wstring string,
              const unsigned int family = FAMILY_PLAIN)
    {
+      if (TTF::fgCurFontIdx<0) return mathtext::bounding_box_t(0, 0, 0, 0, 0, 0);
       if (string.empty() || TTF::fgFace[TTF::fgCurFontIdx] == NULL ||
          TTF::fgFace[TTF::fgCurFontIdx]->units_per_EM == 0) {
          return mathtext::bounding_box_t(0, 0, 0, 0, 0, 0);
@@ -344,7 +343,7 @@ TMathText::TMathText(void)
    : TAttFill(0, 1001)
 {
    // Default constructor.
-   
+
    fRenderer = new TMathTextRenderer(this);
 }
 
@@ -354,7 +353,7 @@ TMathText::TMathText(Double_t x, Double_t y, const char *text)
    : TText(x, y, text), TAttFill(0, 1001)
 {
    // Normal constructor.
-   
+
    fRenderer = new TMathTextRenderer(this);
 }
 
@@ -407,7 +406,7 @@ Render(const Double_t x, const Double_t y, const Double_t size,
       const Double_t angle, const Char_t *t, const Int_t /*length*/)
 {
    // Render the text.
-   
+
    const mathtext::math_text_t math_text(t);
    TMathTextRenderer *renderer = (TMathTextRenderer *)fRenderer;
 
@@ -423,7 +422,7 @@ GetSize(Double_t &x0, Double_t &y0, Double_t &x1, Double_t &y1,
       const Int_t /*length*/)
 {
    // Get the text bounding box.
-   
+
    const mathtext::math_text_t math_text(t);
    TMathTextRenderer *renderer = (TMathTextRenderer *)fRenderer;
 
@@ -458,7 +457,7 @@ GetAlignPoint(Double_t &x0, Double_t &y0,
            const Short_t align)
 {
    // Alignment.
-   
+
    const mathtext::math_text_t math_text(t);
    TMathTextRenderer *renderer = (TMathTextRenderer *)fRenderer;
 
@@ -513,7 +512,7 @@ void TMathText::GetBoundingBox(UInt_t &w, UInt_t &h, Bool_t /*angle*/)
 Double_t TMathText::GetXsize(void)
 {
    // Get X size.
-   
+
    const TString newText = GetTitle();
    const Int_t length    = newText.Length();
    const Char_t *text    = newText.Data();
@@ -535,7 +534,7 @@ Double_t TMathText::GetXsize(void)
 Double_t TMathText::GetYsize(void)
 {
    // Get Y size.
-   
+
    const TString newText = GetTitle();
    const Int_t length    = newText.Length();
    const Char_t *text    = newText.Data();
@@ -574,7 +573,7 @@ TMathText *TMathText::DrawMathText(Double_t x, Double_t y, const char *text)
 void TMathText::Paint(Option_t *)
 {
    // Paint text.
-   
+
    Double_t xsave = fX;
    Double_t ysave = fY;
 
@@ -623,11 +622,27 @@ void TMathText::PaintMathText(Double_t x, Double_t y, Double_t angle,
       size = size / std::min(w, h);
       SetTextFont(10 * (saveFont / 10) + 2);
    }
-   if (gVirtualPS) gVirtualPS->SetBit(kLatex);
 
-   const TString newText = text1;
+   TString newText = text1;
 
    if (newText.Length() == 0) return;
+
+   // Compatibility with the TLatex greek characters
+   newText.ReplaceAll("\\omicron","o");
+   newText.ReplaceAll("\\Alpha","A");
+   newText.ReplaceAll("\\Beta","B");
+   newText.ReplaceAll("\\Epsilon","E");
+   newText.ReplaceAll("\\Zeta","Z");
+   newText.ReplaceAll("\\Eta","H");
+   newText.ReplaceAll("\\Iota","I");
+   newText.ReplaceAll("\\Kappa","K");
+   newText.ReplaceAll("\\Mu","M");
+   newText.ReplaceAll("\\Nu","N");
+   newText.ReplaceAll("\\Omicron","O");
+   newText.ReplaceAll("\\Rho","P");
+   newText.ReplaceAll("\\Tau","T");
+   newText.ReplaceAll("\\Chi","X");
+   newText.ReplaceAll("\\varomega","\\varpi");
 
    const Int_t length = newText.Length();
    const Char_t *text = newText.Data();
@@ -640,8 +655,6 @@ void TMathText::PaintMathText(Double_t x, Double_t y, Double_t angle,
    SetTextSize(saveSize);
    SetTextFont(saveFont);
    SetTextAlign(saveAlign);
-
-   if (gVirtualPS) gVirtualPS->ResetBit(kLatex);
 }
 
 
