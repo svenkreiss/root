@@ -75,6 +75,7 @@
 #include "TVirtualMonitoring.h"
 #include "TParameter.h"
 #include "TOutputListSelectorDataMap.h"
+#include "TStopwatch.h"
 
 // Timeout exception
 #define kPEX_STOPPED  1001
@@ -131,6 +132,33 @@ Bool_t TDispatchTimer::Notify()
 
    // Needed for the next shot
    Reset();
+   return kTRUE;
+}
+
+//
+// Special timer to notify reach of max packet proc time
+//______________________________________________________________________________
+class TProctimeTimer : public TTimer {
+private:
+   TProofPlayer    *fPlayer;
+
+public:
+   TProctimeTimer(TProofPlayer *p, Long_t to) : TTimer(to, kFALSE), fPlayer(p) { }
+
+   Bool_t Notify();
+};
+//______________________________________________________________________________
+Bool_t TProctimeTimer::Notify()
+{
+   // Handle expiration of the timer associated with dispatching pending
+   // events while processing. We must act as fast as possible here, so
+   // we just set a flag submitting a request for dispatching pending events
+
+   if (gDebug > 0) printf("TProctimeTimer::Notify: called!\n");
+
+   fPlayer->SetBit(TProofPlayer::kMaxProcTimeReached);
+
+   // One shot only
    return kTRUE;
 }
 
@@ -199,6 +227,7 @@ TProofPlayer::TProofPlayer(TProof *)
      fTotalEvents(0), fReadBytesRun(0), fReadCallsRun(0), fProcessedRun(0),
      fQueryResults(0), fQuery(0), fPreviousQuery(0), fDrawQueries(0),
      fMaxDrawQueries(1), fStopTimer(0), fStopTimerMtx(0), fDispatchTimer(0),
+     fProcTimeTimer(0), fProcTime(0),
      fOutputFile(0),
      fSaveMemThreshold(-1), fSavePartialResults(kFALSE), fSaveResultsPerPacket(kFALSE)
 {
@@ -207,7 +236,10 @@ TProofPlayer::TProofPlayer(TProof *)
    fInput         = new TList;
    fExitStatus    = kFinished;
    fProgressStatus = new TProofProgressStatus();
+   ResetBit(TProofPlayer::kDispatchOneEvent);
    ResetBit(TProofPlayer::kIsProcessing);
+   ResetBit(TProofPlayer::kMaxProcTimeReached);
+   ResetBit(TProofPlayer::kMaxProcTimeExtended);
 
    static Bool_t initLimitsFinder = kFALSE;
    if (!initLimitsFinder && gProofServ && !gProofServ->IsMaster()) {
@@ -230,6 +262,8 @@ TProofPlayer::~TProofPlayer()
    SafeDelete(fEvIter);
    SafeDelete(fQueryResults);
    SafeDelete(fDispatchTimer);
+   SafeDelete(fProcTimeTimer);
+   SafeDelete(fProcTime);
    SafeDelete(fStopTimer);
 }
 
@@ -1167,6 +1201,8 @@ Long64_t TProofPlayer::Process(TDSet *dset, const char *selector_file,
       Long64_t fst = -1, num;
       TEntryList *enl = 0;
       TEventList *evl = 0;
+      Long_t maxproctime = -1;
+      Bool_t newrun = kFALSE;
       while ((fEvIter->GetNextPacket(fst, num, &enl, &evl) != -1) &&
               !fSelStatus->TestBit(TStatus::kNotOk) &&
               fSelector->GetAbort() == TSelector::kContinue) {
@@ -1199,9 +1235,58 @@ Long64_t TProofPlayer::Process(TDSet *dset, const char *selector_file,
                }
                TProofServ::SetLastMsg(lastMsg);
             }
+            // Set the max proc time, if any
+            if (dset->Current()->GetMaxProcTime() >= 0.)
+               maxproctime = (Long_t) (1000 * dset->Current()->GetMaxProcTime());
+            newrun = (dset->Current()->TestBit(TDSetElement::kNewPacket)) ? kTRUE : kFALSE;
          }
 
-         while (num--) {
+         ResetBit(TProofPlayer::kMaxProcTimeReached);
+         ResetBit(TProofPlayer::kMaxProcTimeExtended);
+         // Setup packet proc time measurement
+         if (maxproctime > 0) {
+            if (!fProcTimeTimer) fProcTimeTimer = new TProctimeTimer(this, maxproctime);
+            fProcTimeTimer->Start(maxproctime, kTRUE); // One shot
+            if (!fProcTime) fProcTime = new TStopwatch();
+            fProcTime->Reset();                        // Reset counters
+         }
+         Long64_t refnum = num;
+         if (refnum < 0 && maxproctime <= 0) {
+            wmsg.Form("neither entries nor max proc time specified:"
+                      " risk of infinite loop: processing aborted");
+            Error("Process", "%s", wmsg.Data());
+            if (gProofServ) {
+               wmsg.Insert(0, TString::Format("ERROR:%s, entry:%lld, ",
+                                             gProofServ->GetOrdinal(), fProcessedRun));
+               gProofServ->SendAsynMessage(wmsg.Data());
+            }
+            fExitStatus = kAborted;
+            ResetBit(TProofPlayer::kIsProcessing);
+            break;
+         }
+         while (refnum < 0 || num--) {
+
+            // Did we use all our time? 
+            if (TestBit(TProofPlayer::kMaxProcTimeReached)) {
+               fProcTime->Stop();
+               if (!newrun && !TestBit(TProofPlayer::kMaxProcTimeExtended) && refnum > 0) {
+                  // How much are we left with?
+                  Float_t xleft = (refnum > num) ? (Float_t) num / (Float_t) (refnum) : 1.;
+                  if (xleft < 0.2) {
+                     // Give another try, 1.5 times the remaining measured expected time
+                     Long_t mpt = (Long_t) (1500 * num / ((Double_t)(refnum - num) / fProcTime->RealTime())); 
+                     SetBit(TProofPlayer::kMaxProcTimeExtended);
+                     fProcTimeTimer->Start(mpt, kTRUE); // One shot
+                     ResetBit(TProofPlayer::kMaxProcTimeReached);
+                  }
+               }
+               if (TestBit(TProofPlayer::kMaxProcTimeReached)) {
+                  Info("Process", "max proc time reached (%ld msecs): packet processing stopped:\n%s",
+                                  maxproctime, lastMsg.Data());
+                 
+                  break;
+               }
+            }
             
             if (!(!fSelStatus->TestBit(TStatus::kNotOk) &&
                    fSelector->GetAbort() == TSelector::kContinue)) break;
@@ -1415,6 +1500,14 @@ Long64_t TProofPlayer::Process(TDSet *dset, TSelector *selector,
    fSelector = selector;
    fCreateSelObj = kFALSE;
    return Process(dset, (const char *)0, option, nentries, first);
+}
+
+//______________________________________________________________________________
+Bool_t TProofPlayer::JoinProcess(TList *)
+{
+   // Not implemented: meaningful only in the remote player. Returns kFALSE.
+
+   return kFALSE;
 }
 
 //______________________________________________________________________________
@@ -1786,6 +1879,9 @@ TProofPlayerRemote::~TProofPlayerRemote()
    // Objects stored in maps are already deleted when merging the feedback
    SafeDelete(fFeedbackLists);
    SafeDelete(fPacketizer);
+
+   if (fProcessMessage)
+      SafeDelete(fProcessMessage);
 }
 
 //______________________________________________________________________________
@@ -2055,7 +2151,8 @@ Long64_t TProofPlayerRemote::Process(TDSet *dset, const char *selector_file,
    // The return value is -1 in case of an error and TSelector::GetStatus() in
    // in case of success.
 
-   PDB(kGlobal,1) Info("Process","Enter");
+   PDB(kGlobal,1) Info("Process", "Enter");
+
    fDSet = dset;
    fExitStatus = kFinished;
 
@@ -2081,6 +2178,7 @@ Long64_t TProofPlayerRemote::Process(TDSet *dset, const char *selector_file,
 
    // Define filename
    TString fn;
+   fSelectorFileName = selector_file;
 
    if (fCreateSelObj) {
       if(!SendSelector(selector_file)) return -1;
@@ -2240,7 +2338,10 @@ Long64_t TProofPlayerRemote::Process(TDSet *dset, const char *selector_file,
    TEventList *evl = (!fProof->IsMaster() && !enl) ? dynamic_cast<TEventList *>(set->GetEntryList())
                                            : (TEventList *)0;
    if (fProof->fProtocol > 14) {
+      if (fProcessMessage) delete fProcessMessage;
+      fProcessMessage = new TMessage(kPROOF_PROCESS);
       mesg << set << fn << fInput << opt << num << fst << evl << sync << enl;
+      (*fProcessMessage) << set << fn << fInput << opt << num << fst << evl << sync << enl;
    } else {
       mesg << set << fn << fInput << opt << num << fst << evl << sync;
       if (enl)
@@ -2383,6 +2484,55 @@ Long64_t TProofPlayerRemote::Process(TDSet *dset, TSelector *selector,
 
    return Process(dset, selector->ClassName(), option, nentries, first);
 }
+
+//______________________________________________________________________________
+Bool_t TProofPlayerRemote::JoinProcess(TList *workers)
+{
+   // Prepares the given list of new workers to join a progressing process.
+   // Returns kTRUE on success, kFALSE otherwise.
+
+   if (!fProcessMessage || !fProof || !fPacketizer) {
+      Error("Process", "Should not happen: fProcessMessage=%p fProof=%p fPacketizer=%p",
+         fProcessMessage, fProof, fPacketizer);
+      return kFALSE;
+   }
+
+   if (!workers || !fProof->IsMaster()) {
+      Error("Process", "Invalid call");
+      return kFALSE;
+   }
+
+   PDB(kGlobal, 1)
+      Info("Process", "Preparing %d new worker(s) to process", workers->GetEntries());
+
+   // Sends the file associated to the TSelector, if necessary
+   if (fCreateSelObj) {
+      PDB(kGlobal, 2)
+         Info("Process", "Sending selector file %s", fSelectorFileName.Data());
+      if(!SendSelector(fSelectorFileName.Data())) {
+         Error("Process", "Problems in sending selector file %s", fSelectorFileName.Data());
+         return kFALSE;
+      }
+   }
+
+   PDB(kGlobal, 2)
+      Info("Process", "Adding new workers to the packetizer");
+   if (fPacketizer->AddWorkers(workers) == -1) {
+      Error("Process", "Cannot add new workers to the packetizer!");
+      return kFALSE;  // TODO: make new wrks inactive
+   }
+
+   PDB(kGlobal, 2)
+      Info("Process", "Broadcasting process message to new workers");
+   fProof->Broadcast(*fProcessMessage, workers);
+
+   // Don't call Collect(): we came here from a global Collect() already which
+   // will take care of new workers as well
+
+   return kTRUE;
+
+}
+
 //______________________________________________________________________________
 Bool_t TProofPlayerRemote::MergeOutputFiles()
 {

@@ -1,4 +1,4 @@
-// @(#)root/treeplayer:$Id$
+// @(#)root/treeplayer:$Id: 725e0cf2ee411db3c264a8c94d1432c21569b191 $
 // Author: Rene Brun   19/01/96
 
 /*************************************************************************
@@ -3688,7 +3688,7 @@ const char* TTreeFormula::EvalStringInstance(Int_t instance)
    const Int_t real_instance = GetRealInstance(instance,0);                                     \
                                                                                                 \
    if (instance==0) fNeedLoading = kTRUE;                                                       \
-   if (real_instance>fNdata[0]) return 0;                                                       \
+   if (real_instance>=fNdata[0]) return 0;                                                      \
                                                                                                 \
    /* Since the only operation in this formula is reading this branch,                          \
       we are guaranteed that this function is first called with instance==0 and                 \
@@ -5316,6 +5316,13 @@ Bool_t TTreeFormula::LoadCurrentDim() {
             // member to be signed integral type.
 
             TBranchElement* branch = (TBranchElement*) leaf->GetBranch();
+            if (branch->GetAddress() == 0) {
+               // Humm there is no space reserve to write the data,
+               // the data member is likely 'removed' from the class
+               // layout, so rather than crashing by accessing 
+               // random memory, make it clear we can't read it.
+               size = 0;
+            }
 
             // NOTE: could be sped up
             if (fHasMultipleVarDim[i]) {// info && info->GetVarDim()>=0) {

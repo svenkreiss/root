@@ -90,7 +90,6 @@ static void R__TObjArray_InsertAt(TObjArray *arr, TObject *obj, Int_t at)
    arr->AddAt( obj, at);
 }
 
-#if 0
 static void R__TObjArray_InsertAfter(TObjArray *arr, TObject *newobj, TObject *oldobj)
 {
    // Slide by one.
@@ -99,12 +98,9 @@ static void R__TObjArray_InsertAfter(TObjArray *arr, TObject *newobj, TObject *o
    while (at<last && arr->At(at) != oldobj) {
       ++at;
    }
-   if (at!=0) {
-      ++at; // we found the object, insert after it
-   }
+   ++at; // we found the object, insert after it
    R__TObjArray_InsertAt(arr, newobj, at);
 }
-#endif
 
 static void R__TObjArray_InsertBefore(TObjArray *arr, TObject *newobj, TObject *oldobj)
 {
@@ -218,8 +214,14 @@ void TStreamerInfo::Build()
    fIsBuilt = kTRUE;
 
    if (fClass->GetCollectionProxy()) {
-      //FIXME: What about arrays of STL containers?
-      TStreamerElement* element = new TStreamerSTL("This", "Used to call the proper TStreamerInfo case", 0, fClass->GetName(), fClass->GetName(), 0);
+      TVirtualCollectionProxy *proxy = fClass->GetCollectionProxy();
+      TString title;
+      if (proxy->GetValueClass()) {
+         title.Form("<%s%s> Used to call the proper TStreamerInfo case",proxy->GetValueClass()->GetName(),proxy->HasPointers() ? "*" : "");
+      } else {
+         title .Form("<%s%s> Used to call the proper TStreamerInfo case",TDataType::GetTypeName(proxy->GetType()),proxy->HasPointers() ? "*" : "");
+      }
+      TStreamerElement* element = new TStreamerSTL("This", title.Data(), 0, fClass->GetName(), *proxy, 0);
       fElements->Add(element);
       Compile();
       return;
@@ -256,7 +258,9 @@ void TStreamerInfo::Build()
       if (!strcmp(bname, "string")) {
          element = new TStreamerSTLstring(bname, btitle, offset, bname, kFALSE);
       } else if (base->IsSTLContainer()) {
-         element = new TStreamerSTL(bname, btitle, offset, bname, 0, kFALSE);
+         TVirtualCollectionProxy *proxy = base->GetClassPointer()->GetCollectionProxy();
+         if (proxy) element = new TStreamerSTL(bname, btitle, offset, bname, *proxy, kFALSE);
+         else       element = new TStreamerSTL(bname, btitle, offset, bname, 0, kFALSE);
          if (fClass->IsLoaded() && ((TStreamerSTL*)element)->GetSTLtype() != TClassEdit::kVector) {
             if (!element->GetClassPointer()->IsLoaded()) {
                Error("Build","The class \"%s\" is compiled and its base class \"%s\" is a collection and we do not have a dictionary for it, we will not be able to read or write this base class.",GetName(),bname);
@@ -389,7 +393,9 @@ void TStreamerInfo::Build()
          if (!strcmp(dmType, "string") || !strcmp(dmType, full_string_name)) {
             element = new TStreamerSTLstring(dmName, dmTitle, offset, dmFull, dmIsPtr);
          } else if (dm->IsSTLContainer()) {
-            element = new TStreamerSTL(dmName, dmTitle, offset, dmFull, dm->GetTrueTypeName(), dmIsPtr);
+            TVirtualCollectionProxy *proxy = TClass::GetClass(dm->GetTypeName() /* the underlying type */)->GetCollectionProxy();
+            if (proxy) element = new TStreamerSTL(dmName, dmTitle, offset, dmFull, *proxy, dmIsPtr);
+            else element = new TStreamerSTL(dmName, dmTitle, offset, dmFull, dm->GetTrueTypeName(), dmIsPtr);
             if (fClass->IsLoaded() && ((TStreamerSTL*)element)->GetSTLtype() != TClassEdit::kVector) {
                if (!element->GetClassPointer()->IsLoaded()) {
                   Error("Build","The class \"%s\" is compiled and for its the data member \"%s\", we do not have a dictionary for the collection \"%s\", we will not be able to read or write this data member.",GetName(),dmName,element->GetClassPointer()->GetName());
@@ -473,6 +479,15 @@ void TStreamerInfo::Build()
             cached = copy;
 
             // Warning("BuildOld","%s::%s is not set from the version %d of %s (You must add a rule for it)\n",GetName(), element->GetName(), GetClassVersion(), GetName() );
+         } else {
+            // If the element is just cached and not repeat, we need to inject an element
+            // to insure the writing.
+            TStreamerElement *writecopy = (TStreamerElement*)element->Clone();
+            fElements->Add(element);
+            writecopy->SetBit(TStreamerElement::kWrite);
+            writecopy->SetNewType( writecopy->GetType() );
+            // Put the write element after the read element (that does caching).
+            element = writecopy;
          }
          cached->SetBit(TStreamerElement::kCache);
          cached->SetNewType( cached->GetType() );
@@ -544,7 +559,45 @@ void TStreamerInfo::BuildCheck()
       fClass = new TClass(GetName(), fClassVersion, 0, 0, -1, -1);
       fClass->SetBit(TClass::kIsEmulation);
       array = fClass->GetStreamerInfos();
-   } else {
+     
+      // Case of a custom collection (the user provided a CollectionProxy
+      // for a class that is not an STL collection).
+      if (GetElements()->GetEntries() == 1) {
+         TObject *element = GetElements()->UncheckedAt(0);
+         Bool_t isstl = element && strcmp("This",element->GetName())==0;
+         if (isstl) {
+            if (element->GetTitle()[0] == '<') {
+               // We know the content.
+               TString content = element->GetTitle();
+               Int_t level = 1;
+               for(Int_t c = 1; c < content.Length(); ++c) {
+                  if (content[c] == '<') ++level;
+                  else if (content[c] == '>') --level;
+                  if (level == 0) {
+                     content.Remove(c+1);
+                     break;
+                  }
+               }
+               content.Prepend("vector");
+               TClass *clequiv = TClass::GetClass(content);
+               TVirtualCollectionProxy *proxy = clequiv->GetCollectionProxy();
+               if (gDebug > 1)
+                  Info("BuildCheck",
+                       "Update the collection proxy of the class \"%s\" \n"
+                       "\tto be similar to \"%s\".",
+                    GetName(),content.Data());
+               fClass->CopyCollectionProxy( *proxy );
+            } else {
+               Warning("BuildCheck", "\n\
+   The class %s had a collection proxy when written but it is not an STL\n \
+   collection and we did not record the type of the content of the collection.\n \
+   We will claim the content is a bool (i.e. no data will be read).",
+                       GetName());
+            }
+         }
+      }
+
+  } else {
       if (TClassEdit::IsSTLCont(fClass->GetName())) {
          SetBit(kCanDelete);
          return;
@@ -559,6 +612,45 @@ void TStreamerInfo::BuildCheck()
          // For consistency, let's print it now!
 
          ::Warning("TClass::TClass", "no dictionary for class %s is available", GetName());
+      }
+
+      // Case of a custom collection (the user provided a CollectionProxy
+      // for a class that is not an STL collection).
+      if (GetElements()->GetEntries() == 1) {
+         TObject *element = GetElements()->UncheckedAt(0);
+         Bool_t isstl = element && strcmp("This",element->GetName())==0;
+         if (isstl && !fClass->GetCollectionProxy()) {
+            if (element->GetTitle()[0] == '<') {
+               // We know the content.
+               TString content = element->GetTitle();
+               Int_t level = 1;
+               for(Int_t c = 1; c < content.Length(); ++c) {
+                  if (content[c] == '<') ++level;
+                  else if (content[c] == '>') --level;
+                  if (level == 0) {
+                     content.Remove(c+1);
+                     break;
+                  }
+               }
+               content.Prepend("vector");
+               TClass *clequiv = TClass::GetClass(content);
+               TVirtualCollectionProxy *proxy = clequiv->GetCollectionProxy();
+               if (gDebug > 1)
+                  Info("BuildCheck",
+                       "Update the collection proxy of the class \"%s\" \n"
+                       "\tto be similar to \"%s\".",
+                    GetName(),content.Data());
+               fClass->CopyCollectionProxy( *proxy );
+            } else {
+               Warning("BuildCheck", "\n\
+   The class %s had a collection proxy when written but it is not an STL\n \
+   collection and we did not record the type of the content of the collection.\n \
+   We will claim the content is a bool (i.e. no data will be read).",
+                       GetName());
+            }
+            SetBit(kCanDelete);
+            return;         
+         }
       }
 
       // If the user has not specified a class version (this _used to_
@@ -1858,16 +1950,26 @@ void TStreamerInfo::BuildOld()
 
             // Now that we are caching the unconverted element, we do not assign it to the real type even if we could have!
             if (element->GetNewType()>0 /* intentionally not including base class for now */
-                && !rules->HasRuleWithTarget( element->GetName(), kTRUE ) )
-               {
-                  TStreamerElement *copy = (TStreamerElement*)element->Clone();
-                  R__TObjArray_InsertBefore( fElements, copy, element );
-                  next(); // move the cursor passed the insert object.
-                  copy->SetBit(TStreamerElement::kRepeat);
-                  element = copy;
+                && !rules->HasRuleWithTarget( element->GetName(), kTRUE ) ) {
 
-                  // Warning("BuildOld","%s::%s is not set from the version %d of %s (You must add a rule for it)\n",GetName(), element->GetName(), GetClassVersion(), GetName() );
-               }
+               TStreamerElement *copy = (TStreamerElement*)element->Clone();
+               R__TObjArray_InsertBefore( fElements, copy, element );
+               next(); // move the cursor passed the insert object.
+               copy->SetBit(TStreamerElement::kRepeat);
+               element = copy;
+               
+               // Warning("BuildOld","%s::%s is not set from the version %d of %s (You must add a rule for it)\n",GetName(), element->GetName(), GetClassVersion(), GetName() );
+            } else {
+               // If the element is just cached and not repeat, we need to inject an element
+               // to insure the writing.
+               TStreamerElement *writecopy = (TStreamerElement*)element->Clone();
+               R__TObjArray_InsertAfter( fElements, writecopy, element );
+               next(); // move the cursor passed the insert object.
+               writecopy->SetBit(TStreamerElement::kWrite);
+               writecopy->SetNewType( writecopy->GetType() );
+               writecopy->SetBit(TStreamerElement::kCache);
+               writecopy->SetOffset(infoalloc ? infoalloc->GetOffset(element->GetName()) : 0);
+            }
             element->SetBit(TStreamerElement::kCache);
             element->SetNewType( element->GetType() );
             element->SetOffset(infoalloc ? infoalloc->GetOffset(element->GetName()) : 0);
@@ -1875,6 +1977,23 @@ void TStreamerInfo::BuildOld()
             // The data member exist in the onfile StreamerInfo and there is a rule
             // that has the same member 'only' has a target ... so this means we are
             // asked to ignore the input data ...
+            if (element->GetType() == kCounter) {
+               // If the element is a counter, we will need its value to read
+               // other data member, so let's do so (by not disabling it) even
+               // if the value will be over-written by a rule.
+            } else {
+               element->SetOffset(kMissing);
+            }
+         }
+      } else if (rules && rules->HasRuleWithTarget( element->GetName(), kTRUE ) ) {
+         // The data member exist in the onfile StreamerInfo and there is a rule
+         // that has the same member 'only' has a target ... so this means we are
+         // asked to ignore the input data ...
+         if (element->GetType() == kCounter) {
+            // If the element is a counter, we will need its value to read
+            // other data member, so let's do so (by not disabling it) even
+            // if the value will be over-written by a rule.
+         } else {
             element->SetOffset(kMissing);
          }
       }
@@ -3615,26 +3734,15 @@ void TStreamerInfo::ls(Option_t *option) const
    }
    for (Int_t i=0;i < fNdata;i++) {
       TStreamerElement *element = (TStreamerElement*)fElem[i];
-      TString sequenceType = " [";
-      Bool_t first = kTRUE;
-      if (element->TestBit(TStreamerElement::kCache)) {
-         first = kFALSE;
-         sequenceType += "cached";
+      TString sequenceType;
+      element->GetSequenceType(sequenceType);
+      if (sequenceType.Length()) {
+         sequenceType.Prepend(" [");
+         sequenceType += "]";
       }
-      if (element->TestBit(TStreamerElement::kRepeat)) {
-         if (!first) sequenceType += ",";
-         first = kFALSE;
-         sequenceType += "repeat";
-      }
-      if (element->TestBit(TStreamerElement::kDoNotDelete)) {
-         if (!first) sequenceType += ",";
-         first = kFALSE;
-         sequenceType += "nodelete";
-      }
-      if (first) sequenceType.Clear();
-      else sequenceType += "]";
-
-      Printf("   i=%2d, %-15s type=%3d, offset=%3d, len=%d, method=%ld%s",i,element->GetName(),fType[i],fOffset[i],fLength[i],fMethod[i],sequenceType.Data());
+      Printf("   i=%2d, %-15s type=%3d, offset=%3d, len=%d, method=%ld%s",
+             i,element->GetName(),fType[i],fOffset[i],fLength[i],fMethod[i],
+             sequenceType.Data());
    }
 }
 
@@ -4183,6 +4291,8 @@ void TStreamerInfo::Streamer(TBuffer &R__b)
          for (Int_t i = 0; i < nobjects; i++) {
             el = (TStreamerElement*)fElements->UncheckedAt(i);
             if( el != 0 && (el->IsA() == TStreamerArtificial::Class() || el->TestBit(TStreamerElement::kRepeat))) {
+               fElements->RemoveAt( i );
+            } else if( el !=0 && (el->TestBit(TStreamerElement::kCache) && !el->TestBit(TStreamerElement::kWrite)) ) {
                fElements->RemoveAt( i );
             }
          }

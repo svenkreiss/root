@@ -179,12 +179,16 @@ TPacketizerUnit::TPacketizerUnit(TList *slaves, Long64_t num, TList *input,
    // Init pointer members
    fWrkStats = 0;
    fPackets = 0;
+   fInput = input;
 
+   fFixedNum = kFALSE;
    Int_t fixednum = -1;
-   if (TProof::GetParameter(input, "PROOF_PacketizerFixedNum", fixednum) != 0 || fixednum <= 0)
-      fixednum = 0;
-   if (fixednum == 1)
+   if (TProof::GetParameter(input, "PROOF_PacketizerFixedNum", fixednum) != 0 || fixednum <= 0) {
+      fFixedNum = kFALSE;
+   } else {
       Info("TPacketizerUnit", "forcing the same cycles on each worker");
+      fFixedNum = kTRUE;
+   }
 
    fCalibFrac = 0.01; 
    if (TProof::GetParameter(input, "PROOF_PacketizerCalibFrac", fCalibFrac) != 0 || fCalibFrac <= 0)
@@ -223,27 +227,70 @@ TPacketizerUnit::TPacketizerUnit(TList *slaves, Long64_t num, TList *input,
 
    fWrkStats = new TMap;
    fWrkStats->SetOwner(kFALSE);
+   fWrkExcluded = 0;
 
    TSlave *slave;
    TIter si(slaves);
-   while ((slave = (TSlave*) si.Next()))
-      fWrkStats->Add(slave, new TSlaveStat(slave, input));
+   while ((slave = (TSlave*) si.Next())) {
+      if (slave->GetParallel() > 0) {
+         fWrkStats->Add(slave, new TSlaveStat(slave, input));
+      } else {
+         if (!fWrkExcluded) {
+            fWrkExcluded = new TList;
+            fWrkExcluded->SetOwner(kFALSE);
+         }
+         PDB(kPacketizer,2)
+            Info("TPacketizerUnit", "node '%s' has NO active worker: excluded from work distribution", slave->GetOrdinal());
+         fWrkExcluded->Add(slave);
+      }
+   }
 
-   fTotalEntries = num;
+   fTotalEntries = 0;
    fNumPerWorker = -1;
-   if (fixednum == 1 && fWrkStats->GetSize() > 0) {
+   if (num > 0 && AssignWork(0,0,num) != 0)
+      Warning("TPacketizerUnit", "some problems assigning work");
+
+   // Save the config parameters in the dedicated list so that they will be saved
+   // in the outputlist and therefore in the relevant TQueryResult
+   fConfigParams->Add(new TParameter<Float_t>("PROOF_PacketizerCalibFrac", fCalibFrac));
+
+   fStopwatch->Start();
+   PDB(kPacketizer,1) Info("TPacketizerUnit", "return");
+}
+
+//______________________________________________________________________________
+Int_t TPacketizerUnit::AssignWork(TDSet *, Long64_t, Long64_t num)
+{
+   // Assign work to be done to this packetizer
+
+   if (num < 0) {
+      Error("AssignWork", "assigned a negative number (%lld) of cycles - protocol error?", num);
+      return -1;
+   }
+
+   fTotalEntries += num;
+   PDB(kPacketizer,1)
+      Info("AssignWork", "assigned %lld additional cycles (new total: %lld)", num, fTotalEntries);
+
+   // Update fixed number counter
+   if (fFixedNum && fWrkStats->GetSize() > 0) {
       // Approximate number: the exact number is determined in GetNextPacket
       fNumPerWorker = fTotalEntries / fWrkStats->GetSize();
       if (fNumPerWorker == 0) fNumPerWorker = 1;
    }
 
-   // Save the config parameters in the dedicated list so that they will be saved
+   // Update/Save the config parameters in the dedicated list so that they will be saved
    // in the outputlist and therefore in the relevant TQueryResult
-   fConfigParams->Add(new TParameter<Long64_t>("PROOF_PacketizerFixedNum", fNumPerWorker));
-   fConfigParams->Add(new TParameter<Float_t>("PROOF_PacketizerCalibFrac", fCalibFrac));
+   TParameter<Long64_t> *fn =
+      (TParameter<Long64_t> *) fConfigParams->FindObject("PROOF_PacketizerFixedNum");
+   if (fn) {
+      fn->SetVal(fNumPerWorker);
+   } else {
+      fConfigParams->Add(new TParameter<Long64_t>("PROOF_PacketizerFixedNum", fNumPerWorker));
+   }
 
-   fStopwatch->Start();
-   PDB(kPacketizer,1) Info("TPacketizerUnit", "return");
+   // Done
+   return 0;
 }
 
 //______________________________________________________________________________
@@ -254,6 +301,7 @@ TPacketizerUnit::~TPacketizerUnit()
    if (fWrkStats)
       fWrkStats->DeleteValues();
    SafeDelete(fWrkStats);
+   SafeDelete(fWrkExcluded);
    SafeDelete(fPackets);
    SafeDelete(fStopwatch);
 }
@@ -304,7 +352,15 @@ TDSetElement *TPacketizerUnit::GetNextPacket(TSlave *sl, TMessage *r)
 
    // Find slave
    TSlaveStat *slstat = (TSlaveStat*) fWrkStats->GetValue(sl);
-   R__ASSERT(slstat != 0);
+   if (!slstat) {
+      // If the worker is none of the known lists, we issue a warning
+      if (!fWrkExcluded->FindObject(sl)) {
+         Warning("GetNextPacket", "Received a packet request from an unknown slave: %s:%s",
+                                  sl->GetName(), sl->GetOrdinal());
+      }
+      // Just return, this worker node is not active
+      return 0;
+   }
 
    PDB(kPacketizer,2)
       Info("GetNextPacket","worker-%s: fAssigned %lld\t", sl->GetOrdinal(), fAssigned);
@@ -324,7 +380,7 @@ TDSetElement *TPacketizerUnit::GetNextPacket(TSlave *sl, TMessage *r)
       // Calculate the progress made in the last packet
       TProofProgressStatus *progress = 0;
       if (status) {
-         // upadte the worker status
+         // update the worker status
          numev = status->GetEntries() - slstat->GetEntriesProcessed();
          progress = slstat->AddProcessed(status);
          if (progress) {
@@ -375,9 +431,24 @@ TDSetElement *TPacketizerUnit::GetNextPacket(TSlave *sl, TMessage *r)
    }
 
    if (fAssigned == fTotalEntries) {
-      // Send last timer message
-      HandleTimer(0);
-      return 0;
+      Bool_t done = kTRUE;
+      // If we are on a submaster, check if there is something else to do
+      if (gProofServ && gProofServ->IsMaster() && !gProofServ->IsTopMaster()) {
+         TDSetElement *nxe = gProofServ->GetNextPacket();
+         if (nxe) {
+            if (AssignWork(0,0,nxe->GetNum()) == 0) {
+               if (fAssigned < fTotalEntries) done = kFALSE;
+            } else {
+               Error("GetNextPacket", "problems assigning additional work: stop");
+            }
+            SafeDelete(nxe);
+         }
+      }
+      if (done) {
+         // Send last timer message
+         HandleTimer(0);
+         return 0;
+      }
    }
 
    if (fStop) {
@@ -431,10 +502,10 @@ TDSetElement *TPacketizerUnit::GetNextPacket(TSlave *sl, TMessage *r)
                if (wrkStat->fRate > 0) {
                   nrm++;
                   sumRate += wrkStat->fRate;
-                  PDB(kPacketizer,3)
-                     Info("GetNextPacket", "%d: worker-%s: rate %lf /s (sum: %lf /s)",
-                                           nrm, tmpWrk->GetOrdinal(), wrkStat->fRate, sumRate);
                }
+               PDB(kPacketizer,3)
+                  Info("GetNextPacket", "%d: worker-%s: rate %lf /s (sum: %lf /s)",
+                                          nrm, tmpWrk->GetOrdinal(), wrkStat->fRate, sumRate);
             } else {
                Warning("GetNextPacket", "dynamic_cast<TSlaveStat *> failing on value for '%s (%s)'! Skipping",
                                         tmpWrk->GetName(), tmpWrk->GetOrdinal());
@@ -511,4 +582,33 @@ TDSetElement *TPacketizerUnit::GetNextPacket(TSlave *sl, TMessage *r)
    fAssigned += slstat->fLastProcessed;
 
    return elem;
+}
+
+//______________________________________________________________________________
+Int_t TPacketizerUnit::AddWorkers(TList *workers)
+{
+   // Adds new workers. Returns the number of workers added, or -1 on failure.
+
+   if (!workers) {
+      Error("AddWorkers", "Null list of new workers!");
+      return -1;
+   }
+
+   Int_t curNumOfWrks = fWrkStats->GetEntries();
+
+   TSlave *sl;
+   TIter next(workers);
+   while (( sl = dynamic_cast<TSlave*>(next()) ))
+      fWrkStats->Add(sl, new TSlaveStat(sl, fInput));
+
+   fNumPerWorker = -1;
+   if (fFixedNum && fWrkStats->GetSize() > 0) {
+      // Approximate number: the exact number is determined in GetNextPacket
+      fNumPerWorker = (fNumPerWorker * curNumOfWrks) / fWrkStats->GetSize();
+      if (fNumPerWorker == 0) fNumPerWorker = 1;
+   }
+
+   fConfigParams->Add(new TParameter<Long64_t>("PROOF_PacketizerFixedNum", fNumPerWorker));
+
+   return fWrkStats->GetEntries();
 }

@@ -32,6 +32,7 @@
 #include "TError.h"
 #include "TDataType.h"
 #include "TVirtualMutex.h"
+#include "TVirtualCollectionProxy.h"
 #include <iostream>
 
 #include <string>
@@ -305,6 +306,36 @@ const char *TStreamerElement::GetFullName() const
 }
 
 //______________________________________________________________________________
+void TStreamerElement::GetSequenceType(TString &sequenceType) const
+{
+   // Fill type with the string representation of sequence
+   // information including 'cached','repeat','write' or
+   // 'nodelete'.
+
+   sequenceType.Clear();
+   Bool_t first = kTRUE;
+   if (TestBit(TStreamerElement::kCache)) {
+      first = kFALSE;
+      sequenceType += "cached";
+   }
+   if (TestBit(TStreamerElement::kRepeat)) {
+      if (!first) sequenceType += ",";
+      first = kFALSE;
+      sequenceType += "repeat";
+   }
+   if (TestBit(TStreamerElement::kDoNotDelete)) {
+      if (!first) sequenceType += ",";
+      first = kFALSE;
+      sequenceType += "nodelete";
+   }
+   if (TestBit(TStreamerElement::kWrite)) {
+      if (!first) sequenceType += ",";
+      first = kFALSE;
+      sequenceType += "write";
+   }
+}
+
+//______________________________________________________________________________
 Int_t TStreamerElement::GetSize() const
 {
    // Returns size of this element in bytes.
@@ -374,9 +405,16 @@ void TStreamerElement::ls(Option_t *) const
 
    TString temp(GetTypeName());
    if (IsaPointer() && !fTypeName.Contains("*")) temp += "*";
+
+   TString sequenceType;
+   GetSequenceType(sequenceType);
+   if (sequenceType.Length()) {
+      sequenceType.Prepend(" (");
+      sequenceType += ") ";
+   }
    printf("  %-14s %-15s offset=%3d type=%2d %s%-20s\n",
-      temp.Data(),GetFullName(),fOffset,fType,TestBit(kCache)?"(cached) ":"",
-      GetTitle());
+          temp.Data(),GetFullName(),fOffset,fType,sequenceType.Data(),
+          GetTitle());
 }
 
 //______________________________________________________________________________
@@ -463,6 +501,7 @@ void TStreamerElement::Streamer(TBuffer &R__b)
       R__b.SetBufferOffset(R__s+R__c+sizeof(UInt_t));
       
       ResetBit(TStreamerElement::kCache);
+      ResetBit(TStreamerElement::kWrite);
    } else {
       R__b.WriteClassBuffer(TStreamerElement::Class(),this);
    }
@@ -592,7 +631,13 @@ void TStreamerBase::ls(Option_t *) const
 {
    // Print the content of the element.
 
-   printf("  %-14s %-15s offset=%3d type=%2d %s%-20s\n",GetFullName(),GetTypeName(),fOffset,fType,TestBit(kCache)?"(cached) ":"",GetTitle());
+   TString sequenceType;
+   GetSequenceType(sequenceType);
+   if (sequenceType.Length()) {
+      sequenceType.Prepend(" (");
+      sequenceType += ") ";
+   }
+   printf("  %-14s %-15s offset=%3d type=%2d %s%-20s\n",GetFullName(),GetTypeName(),fOffset,fType,sequenceType.Data(),GetTitle());
 }
 
 //______________________________________________________________________________
@@ -1511,6 +1556,37 @@ TStreamerSTL::TStreamerSTL() : fSTLtype(0),fCtype(0)
 
 //______________________________________________________________________________
 TStreamerSTL::TStreamerSTL(const char *name, const char *title, Int_t offset,
+                           const char *typeName, const TVirtualCollectionProxy &proxy, Bool_t dmPointer)
+        : TStreamerElement(name,title,offset,kSTL,typeName)
+{
+   // Create a TStreamerSTL object.
+
+   fTypeName = TClassEdit::ShortType(fTypeName,TClassEdit::kDropStlDefault).c_str();
+
+  if (name==typeName /* intentional pointer comparison */
+      || strcmp(name,typeName)==0) {
+      // We have a base class.
+      fName = fTypeName;
+   }
+   fSTLtype = proxy.GetCollectionType();
+   fCtype   = 0;
+
+   if (dmPointer) fSTLtype += TVirtualStreamerInfo::kOffsetP;
+
+   if (fSTLtype == kSTLbitset) {
+      // Nothing to check
+   } else if (proxy.GetValueClass()) {
+      if (proxy.HasPointers()) fCtype = TVirtualStreamerInfo::kObjectp;
+      else                     fCtype = TVirtualStreamerInfo::kObject;
+   } else {
+      fCtype = proxy.GetType();
+      if (proxy.HasPointers()) fCtype += TVirtualStreamerInfo::kOffsetP;
+   }
+   if (TStreamerSTL::IsaPointer()) fType = TVirtualStreamerInfo::kSTLp;  
+}
+
+//______________________________________________________________________________
+TStreamerSTL::TStreamerSTL(const char *name, const char *title, Int_t offset,
                            const char *typeName, const char *trueType, Bool_t dmPointer)
         : TStreamerElement(name,title,offset,kSTL,typeName)
 {
@@ -1532,7 +1608,7 @@ TStreamerSTL::TStreamerSTL(const char *name, const char *title, Int_t offset,
    strlcpy(s,t,nch+1);
    char *sopen  = strchr(s,'<'); 
    if (sopen == 0) {
-      Fatal("TStreamerSTL","For %s, the type name (%s) is not seemingly not a template (template argument not found)", name, s);
+      Fatal("TStreamerSTL","For %s, the type name (%s) is seemingly not a template (template argument not found)", name, s);
       return;
    }
    *sopen  = 0; sopen++;
@@ -1702,9 +1778,15 @@ void TStreamerSTL::ls(Option_t *) const
       cdim.Form("[%d]",fMaxIndex[i]);
       name += cdim;
    }
+   TString sequenceType;
+   GetSequenceType(sequenceType);
+   if (sequenceType.Length()) {
+      sequenceType.Prepend(" (");
+      sequenceType += ") ";
+   }
    printf("  %-14s %-15s offset=%3d type=%2d %s,stl=%d, ctype=%d, %-20s\n",
-      GetTypeName(),name.Data(),fOffset,fType,TestBit(kCache)?"(cached)":"",
-      fSTLtype,fCtype,GetTitle());
+          GetTypeName(),name.Data(),fOffset,fType,sequenceType.Data(),
+          fSTLtype,fCtype,GetTitle());
 }
 
 //______________________________________________________________________________

@@ -169,7 +169,7 @@ void topDriver( string input ) {
   // Fill them using the XML parser
   //xmlParser.FillMeasurementsAndChannelsFromXML( input, measurement_list, channel_list );
 
-  measurement_list = xmlParser.GetMeasurementsFromXML( input );
+  measurement_list = xmlParser.GetMeasurementsFromXMLPtr( input );
 
   // At this point, we have all the information we need
   // from the xml files.

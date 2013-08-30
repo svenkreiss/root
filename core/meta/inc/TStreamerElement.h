@@ -1,4 +1,4 @@
-// @(#)root/meta:$Id$
+// @(#)root/meta:$Id: e0eac11e63ad37390c9467c97c5c6849c4ab7d39 $
 // Author: Rene Brun   12/10/2000
 
 /*************************************************************************
@@ -90,6 +90,7 @@ public:
    TClass*          GetNewClass() const { return fNewClass; }
    Int_t            GetType() const {return fType;}
    Int_t            GetOffset() const {return fOffset;}
+   void             GetSequenceType(TString &type) const;
    Int_t            GetTObjectOffset() const { return fTObjectOffset; }
    const char      *GetTypeName() const {return fTypeName.Data();}
    const char      *GetTypeNameBasic() const;
@@ -362,6 +363,8 @@ public:
    TStreamerSTL();
    TStreamerSTL(const char *name, const char *title, Int_t offset, 
                 const char *typeName, const char *trueType, Bool_t dmPointer);
+   TStreamerSTL(const char *name, const char *title, Int_t offset, 
+                const char *typeName, const TVirtualCollectionProxy &proxy , Bool_t dmPointer);
    virtual       ~TStreamerSTL();
    Bool_t         CannotSplit() const;
    Bool_t         IsaPointer() const;

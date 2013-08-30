@@ -138,9 +138,10 @@ class TSelector;
 // 32 -> 33: Development cycle 5.29/04 (fixed worker activation, new startup technology, ...)
 // 33 -> 34: Development cycle 5.33/02 (fix load issue, ...)
 // 34 -> 35: Development cycle 5.99/01 (PLite on workers, staging requests in separate dsmgr...)
+// 35 -> 36: SetParallel in dynamic mode (changes default in GoParallel), cancel staging requests
 
 // PROOF magic constants
-const Int_t       kPROOF_Protocol        = 35;            // protocol version number
+const Int_t       kPROOF_Protocol        = 36;            // protocol version number
 const Int_t       kPROOF_Port            = 1093;          // IANA registered PROOF port
 const char* const kPROOF_ConfFile        = "proof.conf";  // default config file
 const char* const kPROOF_ConfDir         = "/usr/local/root";  // default config dir
@@ -158,6 +159,7 @@ const char* const kPROOF_TerminateWorker = "+++ terminating +++"; // signal work
 const char* const kPROOF_WorkerIdleTO    = "+++ idle-timeout +++"; // signal worker idle timeout in MarkBad
 const char* const kPROOF_InputDataFile   = "inputdata.root";      // Default input data file name
 const char* const kPROOF_MissingFiles    = "MissingFiles";  // Missingfile list name
+const Long64_t    kPROOF_DynWrkPollInt_s = 10;  // minimum number of seconds between two polls for dyn wrks
 
 #ifndef R__WIN32
 const char* const kCP     = "/bin/cp -fp";
@@ -464,7 +466,8 @@ private:
       kSetDefaultTreeName  = 12, //Set the default tree name
       kCache               = 13, //Show/clear cache
       kRequestStaging      = 14, //Request staging of a dataset
-      kStagingStatus       = 15  //Obtain staging status for the given dataset
+      kStagingStatus       = 15, //Obtain staging status for the given dataset
+      kCancelStaging       = 16  //Cancels dataset staging request
    };
    enum ESendFileOpt {
       kAscii               = 0x0,
@@ -505,6 +508,8 @@ private:
    TList          *fRecvMessages;    //Messages received during collect not yet processed
    TList          *fSlaveInfo;       //!list returned by kPROOF_GETSLAVEINFO
    Bool_t          fSendGroupView;   //if true send new group view
+   Bool_t          fIsPollingWorkers;  //will be set to kFALSE to prevent recursive dyn workers check in dyn mode
+   Long64_t        fLastPollWorkers_s;  //timestamp (in seconds) of last poll for workers, -1 if never checked
    TList          *fActiveSlaves;    //list of active slaves (subset of all slaves)
    TString         fActiveSlavesSaved;// comma-separated list of active slaves (before last call to
                                       // SetParallel or Activate/DeactivateWorkers)
@@ -588,6 +593,8 @@ private:
    Int_t           fRedirectNext;
 
    TString         fPerfTree;        // If non-null triggers saving of the performance info into fPerfTree
+
+   TList          *fWrksOutputReady; // List of workers ready to send output (in control output sending mode)
    
    static TPluginHandler *fgLogViewer;  // Log dialog box plugin
 
@@ -642,12 +649,13 @@ private:
    void     AskStatistics();
    void     AskParallel();
    Int_t    GoParallel(Int_t nodes, Bool_t accept = kFALSE, Bool_t random = kFALSE);
+   Int_t    GoMoreParallel(Int_t nWorkersToAdd);
    Int_t    SetParallelSilent(Int_t nodes, Bool_t random = kFALSE);
    void     RecvLogFile(TSocket *s, Int_t size);
    void     NotifyLogMsg(const char *msg, const char *sfx = "\n");
    Int_t    BuildPackage(const char *package, EBuildPackageOpt opt = kBuildAll, Int_t chkveropt = 2);
    Int_t    BuildPackageOnClient(const char *package, Int_t opt = 0, TString *path = 0, Int_t chkveropt = 2);
-   Int_t    LoadPackage(const char *package, Bool_t notOnClient = kFALSE, TList *loadopts = 0);
+   Int_t    LoadPackage(const char *package, Bool_t notOnClient = kFALSE, TList *loadopts = 0, TList *workers = 0);
    Int_t    LoadPackageOnClient(const char *package, TList *loadopts = 0);
    Int_t    UnloadPackage(const char *package);
    Int_t    UnloadPackageOnClient(const char *package);
@@ -678,6 +686,7 @@ private:
    Int_t    HandleInputMessage(TSlave *wrk, TMessage *m, Bool_t deactonfail = kFALSE);
    void     HandleSubmerger(TMessage *mess, TSlave *sl);
    void     SetMonitor(TMonitor *mon = 0, Bool_t on = kTRUE);
+   Int_t    PollForNewWorkers();
 
    void     ReleaseMonitor(TMonitor *mon);
 
@@ -862,6 +871,9 @@ public:
    void        StopProcess(Bool_t abort, Int_t timeout = -1);
    void        Browse(TBrowser *b);
 
+   virtual Int_t Echo(const TObject *obj);
+   virtual Int_t Echo(const char *str);
+
    Int_t       SetParallel(Int_t nodes = -1, Bool_t random = kFALSE);
    void        SetLogLevel(Int_t level, UInt_t mask = TProofDebug::kAll);
 
@@ -878,17 +890,17 @@ public:
    Int_t         ClearPackages();
    Int_t         ClearPackage(const char *package);
    Int_t         DownloadPackage(const char *par, const char *dstdir = 0);
-   Int_t         EnablePackage(const char *package, Bool_t notOnClient = kFALSE);
+   Int_t         EnablePackage(const char *package, Bool_t notOnClient = kFALSE, TList *workers = 0);
    Int_t         EnablePackage(const char *package, const char *loadopts,
-                               Bool_t notOnClient = kFALSE);
+                               Bool_t notOnClient = kFALSE, TList *workers = 0);
    Int_t         EnablePackage(const char *package, TList *loadopts,
-                               Bool_t notOnClient = kFALSE);
-   Int_t         UploadPackage(const char *par, EUploadPackageOpt opt = kUntar);
+                               Bool_t notOnClient = kFALSE, TList *workers = 0);
+   Int_t         UploadPackage(const char *par, EUploadPackageOpt opt = kUntar, TList *workers = 0);
    virtual Int_t Load(const char *macro, Bool_t notOnClient = kFALSE, Bool_t uniqueOnly = kTRUE,
                       TList *wrks = 0);
 
-   Int_t       AddDynamicPath(const char *libpath, Bool_t onClient = kFALSE, TList *wrks = 0);
-   Int_t       AddIncludePath(const char *incpath, Bool_t onClient = kFALSE, TList *wrks = 0);
+   Int_t       AddDynamicPath(const char *libpath, Bool_t onClient = kFALSE, TList *wrks = 0, Bool_t doCollect = kTRUE);
+   Int_t       AddIncludePath(const char *incpath, Bool_t onClient = kFALSE, TList *wrks = 0, Bool_t doCollect = kTRUE);
    Int_t       RemoveDynamicPath(const char *libpath, Bool_t onClient = kFALSE);
    Int_t       RemoveIncludePath(const char *incpath, Bool_t onClient = kFALSE);
 
@@ -913,6 +925,7 @@ public:
    virtual Bool_t RequestStagingDataSet(const char *dataset);
    virtual TFileCollection *GetStagingStatusDataSet(const char *dataset);
    virtual void   ShowStagingStatusDataSet(const char *dataset, const char *optStr = "filter:SsCc");
+   virtual Bool_t CancelStagingDataSet(const char *dataset);
 
    virtual Int_t SetDataSetTreeName( const char *dataset, const char *treename);
 

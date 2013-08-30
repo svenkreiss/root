@@ -36,7 +36,16 @@ namespace RooStats{
        virtual ~ConfigParser() {}
 
        // The "main" method
-       virtual std::vector< RooStats::HistFactory::Measurement* > GetMeasurementsFromXML(std::string input); 
+       virtual std::vector< RooStats::HistFactory::Measurement* > GetMeasurementsFromXMLPtr(std::string input); 
+       // deprecated
+       virtual std::vector< RooStats::HistFactory::Measurement > GetMeasurementsFromXML(std::string input) {
+         std::vector< RooStats::HistFactory::Measurement* > listPtr = GetMeasurementsFromXMLPtr(input);
+         std::vector< RooStats::HistFactory::Measurement > listOut;
+         for( unsigned int i=0; i < listPtr.size(); i++ ) {
+           listOut.push_back( *(listPtr.at(i)) );
+         }
+         return listOut;
+       }
        virtual RooStats::HistFactory::Measurement* CreateMeasurementFromDriverNode( TXMLNode* node );
        virtual RooStats::HistFactory::Channel* ParseChannelXMLFile( std::string filen );
 
