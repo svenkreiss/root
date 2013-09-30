@@ -627,7 +627,7 @@ void TMathText::PaintMathText(Double_t x, Double_t y, Double_t angle,
 
    if (newText.Length() == 0) return;
 
-   // Compatibility with the TLatex greek characters
+   // Compatibility with TLatex
    newText.ReplaceAll("\\omicron","o");
    newText.ReplaceAll("\\Alpha","A");
    newText.ReplaceAll("\\Beta","B");
@@ -643,6 +643,18 @@ void TMathText::PaintMathText(Double_t x, Double_t y, Double_t angle,
    newText.ReplaceAll("\\Tau","T");
    newText.ReplaceAll("\\Chi","X");
    newText.ReplaceAll("\\varomega","\\varpi");
+   if (newText.Contains("\\frac")) {
+      Int_t len,i1,i2;
+      TString str;
+      while (newText.Contains("\\frac")) {
+         len = newText.Length();
+         i1  = newText.Index("\\frac");
+         str = newText(i1,len).Data();
+         i2  = str.Index("}{");
+         newText.Replace(i1+i2,2," \\over ");
+         newText.Remove(i1,5);
+      }
+   }
 
    const Int_t length = newText.Length();
    const Char_t *text = newText.Data();
