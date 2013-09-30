@@ -25,6 +25,7 @@
 #pragma link C++ class RooGaussModel+ ;
 #pragma link C++ class RooGExpModel+ ;
 #pragma link C++ class RooHistConstraint+ ;
+#pragma link C++ class RooKdTree+ ;
 #pragma link C++ class RooKeysPdf+ ;
 #pragma link C++ class RooParamKeysPdf+ ;
 #pragma link C++ class RooNDKeysPdf+ ;
