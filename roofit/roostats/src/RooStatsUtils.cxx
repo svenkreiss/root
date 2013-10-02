@@ -334,6 +334,128 @@ namespace RooStats {
       return h1;
    }
 
+   TH2* ProfileMinOntoXY( TH3& h3, bool subtractMin ) {
+      // creates proflile from 3D to 2D with proper name and title
+
+      TString profileName( h3.GetName() );
+      profileName += "_profileOntoXY";
+      TString profileTitle( h3.GetTitle() );
+      profileTitle += " profile onto x,y axes";
+      TH2* h2 = new TH2D( profileName, profileTitle, 
+         h3.GetNbinsX(), h3.GetXaxis()->GetXmin(), h3.GetXaxis()->GetXmax(), 
+         h3.GetNbinsY(), h3.GetYaxis()->GetXmin(), h3.GetYaxis()->GetXmax()
+      );
+      
+      // initialize to the maximum of the 3D hist
+      for( int x=0; x < (h2->GetNbinsX()+2)*(h2->GetNbinsY()+2); x++ ) 
+         h2->SetBinContent( x, h3.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int z=0; z < h3.GetNbinsZ()+2; z++ ) {
+         for( int y=0; y < h3.GetNbinsY()+2; y++ ) {
+            for( int x=0; x < h3.GetNbinsX()+2; x++ ) {
+               int binNumber2D = x + y*(h3.GetNbinsX()+2);
+               int binNumber3D = x + y*(h3.GetNbinsX()+2) + z*(h3.GetNbinsX()+2)*(h3.GetNbinsY()+2);
+               
+               // profiling
+               if( h2->GetBinContent(binNumber2D) > h3.GetBinContent(binNumber3D) ) {
+                  h2->SetBinContent(binNumber2D, h3.GetBinContent(binNumber3D) );
+               }
+            }
+         }
+      }  
+      
+      if( subtractMin ) {
+         for( int x=0; x < (h2->GetNbinsX()+2)*(h2->GetNbinsY()+2); x++ ) {
+            h2->SetBinContent( x, h2->GetBinContent(x) - h2->GetMinimum() );
+         }
+      }
+      
+      return h2;
+   }
+   TH2* ProfileMinOntoYZ( TH3& h3, bool subtractMin ) {
+      // creates proflile from 3D to 2D with proper name and title
+
+      TString profileName( h3.GetName() );
+      profileName += "_profileOntoYZ";
+      TString profileTitle( h3.GetTitle() );
+      profileTitle += " profile onto y,z axes";
+      TH2* h2 = new TH2D( profileName, profileTitle, 
+         h3.GetNbinsY(), h3.GetYaxis()->GetXmin(), h3.GetYaxis()->GetXmax(), 
+         h3.GetNbinsZ(), h3.GetZaxis()->GetXmin(), h3.GetZaxis()->GetXmax()
+      );
+      
+      // initialize to the maximum of the 3D hist
+      for( int x=0; x < (h2->GetNbinsX()+2)*(h2->GetNbinsY()+2); x++ ) 
+         h2->SetBinContent( x, h3.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int z=0; z < h3.GetNbinsZ()+2; z++ ) {
+         for( int y=0; y < h3.GetNbinsY()+2; y++ ) {
+            for( int x=0; x < h3.GetNbinsX()+2; x++ ) {
+               int binNumber2D = y + z*(h3.GetNbinsY()+2);
+               int binNumber3D = x + y*(h3.GetNbinsX()+2) + z*(h3.GetNbinsX()+2)*(h3.GetNbinsY()+2);
+               
+               // profiling
+               if( h2->GetBinContent(binNumber2D) > h3.GetBinContent(binNumber3D) ) {
+                  h2->SetBinContent(binNumber2D, h3.GetBinContent(binNumber3D) );
+               }
+            }
+         }
+      }  
+      
+      if( subtractMin ) {
+         for( int x=0; x < (h2->GetNbinsX()+2)*(h2->GetNbinsY()+2); x++ ) {
+            h2->SetBinContent( x, h2->GetBinContent(x) - h2->GetMinimum() );
+         }
+      }
+      
+      return h2;
+   }
+   TH2* ProfileMinOntoXZ( TH3& h3, bool subtractMin ) {
+      // creates proflile from 3D to 2D with proper name and title
+
+      TString profileName( h3.GetName() );
+      profileName += "_profileOntoXZ";
+      TString profileTitle( h3.GetTitle() );
+      profileTitle += " profile onto x,z axes";
+      TH2* h2 = new TH2D( profileName, profileTitle, 
+         h3.GetNbinsX(), h3.GetXaxis()->GetXmin(), h3.GetXaxis()->GetXmax(), 
+         h3.GetNbinsZ(), h3.GetZaxis()->GetXmin(), h3.GetZaxis()->GetXmax()
+      );
+      
+      // initialize to the maximum of the 3D hist
+      for( int x=0; x < (h2->GetNbinsX()+2)*(h2->GetNbinsY()+2); x++ ) 
+         h2->SetBinContent( x, h3.GetMaximum() );
+      
+      // do the filling and profiling
+      for( int z=0; z < h3.GetNbinsZ()+2; z++ ) {
+         for( int y=0; y < h3.GetNbinsY()+2; y++ ) {
+            for( int x=0; x < h3.GetNbinsX()+2; x++ ) {
+               int binNumber2D = x + z*(h3.GetNbinsX()+2);
+               int binNumber3D = x + y*(h3.GetNbinsX()+2) + z*(h3.GetNbinsX()+2)*(h3.GetNbinsY()+2);
+               
+               // profiling
+               if( h2->GetBinContent(binNumber2D) > h3.GetBinContent(binNumber3D) ) {
+                  h2->SetBinContent(binNumber2D, h3.GetBinContent(binNumber3D) );
+               }
+            }
+         }
+      }  
+      
+      if( subtractMin ) {
+         for( int x=0; x < (h2->GetNbinsX()+2)*(h2->GetNbinsY()+2); x++ ) {
+            h2->SetBinContent( x, h2->GetBinContent(x) - h2->GetMinimum() );
+         }
+      }
+      
+      return h2;
+   }
+
+
+
+
+
 
    double ContourLevelHPD( TH1* h, double integralValue ) {
       int numBins = h->GetNbinsX()+2;
