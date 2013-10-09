@@ -187,7 +187,7 @@ def main():
       nuisHists = []
       for n in NUISs:
          h = ROOT.TH2D(
-            "nuisPar_"+n[0], "value of "+n[0]+";"+poi1[0]+";"+poi2[0]+";nuisance parameter value",
+            "nuisParValue_"+n[0], "value of "+n[0]+";"+poi1[0]+";"+poi2[0]+";nuisance parameter value",
             int(poi1[1][0]), poi1[1][1], poi1[1][2],
             int(poi2[1][0]), poi2[1][1], poi2[1][2],
          )
@@ -195,6 +195,33 @@ def main():
             bin = nllHist.FindBin( p1,p2 )
             h.SetBinContent( bin, nVal )
          nuisHists.append( h )
+
+   if len( POIs ) == 3:
+      poi1 = POIs[0]
+      poi2 = POIs[1]
+      poi3 = POIs[2]
+      nllHist = ROOT.TH3D( 
+         "profiledNLL", "profiled NLL;"+poi1[0]+";"+poi2[0]+";"+poi3[0],
+         int(poi1[1][0]), poi1[1][1], poi1[1][2],
+         int(poi2[1][0]), poi2[1][1], poi2[1][2],
+         int(poi3[1][0]), poi3[1][1], poi3[1][2],
+      )
+      
+      # initialize to maxNLL
+      for i in range( (nllHist.GetNbinsX()+2)*(nllHist.GetNbinsY()+2)*(nllHist.GetNbinsZ()+2) ): 
+         nllHist.SetBinContent( i, maxHist )
+
+      for nll,p1,p2,p3 in zip(NLL['nll'],NLL[poi1[0]],NLL[poi2[0]],NLL[poi3[0]]):
+         bin,val = (None,None)
+         bin = nllHist.FindBin( p1,p2,p3 )
+         val = nll
+         if options.subtractMinNLL: val -= minNLL
+         if nllHist.GetBinContent( bin ) > val: nllHist.SetBinContent( bin, val )
+         
+      # # in 2D, also create 68% and 95% contours
+      # c = ROOT.TCanvas()
+      # tgs += getContours( nllHist, 1.15, "68TG", c )
+      # tgs += getContours( nllHist, 3.0,  "95TG", c )
 
 
       
