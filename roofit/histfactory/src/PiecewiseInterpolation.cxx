@@ -37,6 +37,7 @@ ClassImp(PiecewiseInterpolation)
 PiecewiseInterpolation::PiecewiseInterpolation()
 {
   _positiveDefinite=false;
+  _cache=false;
 }
 
 
@@ -52,7 +53,8 @@ PiecewiseInterpolation::PiecewiseInterpolation(const char* name, const char* tit
   _lowSet("!lowSet","low-side variation",this),
   _highSet("!highSet","high-side variation",this),
   _paramSet("!paramSet","high-side variation",this),
-  _positiveDefinite(false)
+  _positiveDefinite(false),
+  _cache(false)
 
 {
   // Constructor with two set of RooAbsReals. The value of the function will be
@@ -125,7 +127,8 @@ PiecewiseInterpolation::PiecewiseInterpolation(const PiecewiseInterpolation& oth
   _highSet("!highSet",this,other._highSet),
   _paramSet("!paramSet",this,other._paramSet),
   _positiveDefinite(other._positiveDefinite),
-  _interpCode(other._interpCode)
+  _interpCode(other._interpCode),
+  _cache(false)
 {
   // Copy constructor
 
@@ -161,9 +164,6 @@ Double_t PiecewiseInterpolation::evaluate() const
   RooFIter highIter(_highSet.fwdIterator()) ;
   RooFIter paramIter(_paramSet.fwdIterator()) ;
 
-  static bool _cache = false;
-  static vector<double> _cache_low;
-  static vector<double> _cache_high;
   vector<double>::iterator _cache_low_iter  = _cache_low.begin();
   vector<double>::iterator _cache_high_iter = _cache_high.begin();
 
@@ -171,10 +171,10 @@ Double_t PiecewiseInterpolation::evaluate() const
     while((param=(RooAbsReal*)paramIter.next())) {
       double low  = ((RooAbsReal*)lowIter.next())->getVal();
       double high = ((RooAbsReal*)highIter.next())->getVal();
-      if( low  < 1e-30  &&  low  > -1e-30 ) low = 0.0;
-      if( high < 1e-30  &&  high > -1e-30 ) high = 0.0;
       _cache_low.push_back( low );
       _cache_high.push_back( high );
+
+      //cout << param->GetName() << " caching: High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
     }
     _cache_low_iter = _cache_low.begin();
     _cache_high_iter = _cache_high.begin();
@@ -245,6 +245,11 @@ Double_t PiecewiseInterpolation::evaluate() const
       // WVE *** THIS CODE IS CRITICAL TO HISTFACTORY FIT CPU PERFORMANCE ***
       // WVE *** Do not modify unless you know what you are doing...      ***
       // WVE ****************************************************************
+
+      if( high == nominal  &&  low == nominal ) {
+        // this is just always zero, so just skip everything, especially the param->getVal() call
+        break;
+      }
 
       double x  = param->getVal();      
       if (x>1) {

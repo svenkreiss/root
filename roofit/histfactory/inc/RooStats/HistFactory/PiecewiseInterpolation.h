@@ -90,6 +90,11 @@ protected:
 
   Double_t evaluate() const;
 
+  // testing
+  mutable bool _cache;  //!
+  mutable std::vector<double> _cache_low; //!
+  mutable std::vector<double> _cache_high; //!
+
   ClassDef(PiecewiseInterpolation,3) // Sum of RooAbsReal objects
 };
 
