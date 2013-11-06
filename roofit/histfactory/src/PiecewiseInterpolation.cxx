@@ -37,7 +37,6 @@ ClassImp(PiecewiseInterpolation)
 PiecewiseInterpolation::PiecewiseInterpolation()
 {
   _positiveDefinite=false;
-  _cache=false;
 }
 
 
@@ -53,8 +52,7 @@ PiecewiseInterpolation::PiecewiseInterpolation(const char* name, const char* tit
   _lowSet("!lowSet","low-side variation",this),
   _highSet("!highSet","high-side variation",this),
   _paramSet("!paramSet","high-side variation",this),
-  _positiveDefinite(false),
-  _cache(false)
+  _positiveDefinite(false)
 
 {
   // Constructor with two set of RooAbsReals. The value of the function will be
@@ -127,8 +125,7 @@ PiecewiseInterpolation::PiecewiseInterpolation(const PiecewiseInterpolation& oth
   _highSet("!highSet",this,other._highSet),
   _paramSet("!paramSet",this,other._paramSet),
   _positiveDefinite(other._positiveDefinite),
-  _interpCode(other._interpCode),
-  _cache(false)
+  _interpCode(other._interpCode)
 {
   // Copy constructor
 
@@ -156,43 +153,17 @@ Double_t PiecewiseInterpolation::evaluate() const
   Double_t sum(nominal) ;
 
   RooAbsReal* param ;
-  // RooAbsReal* high ;
-  // RooAbsReal* low ;
+  RooAbsReal* high ;
+  RooAbsReal* low ;
   int i=0;
 
   RooFIter lowIter(_lowSet.fwdIterator()) ;
   RooFIter highIter(_highSet.fwdIterator()) ;
   RooFIter paramIter(_paramSet.fwdIterator()) ;
 
-  vector<double>::iterator _cache_low_iter  = _cache_low.begin();
-  vector<double>::iterator _cache_high_iter = _cache_high.begin();
-
-  if( !_cache ){
-    // while((param=(RooAbsReal*)paramIter.next())) {
-    //   double low  = ((RooAbsReal*)lowIter.next())->getVal();
-    //   double high = ((RooAbsReal*)highIter.next())->getVal();
-    //   _cache_low.push_back( low );
-    //   _cache_high.push_back( high );
-
-    //   //cout << param->GetName() << " caching: High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
-    // }
-    // _cache_low_iter = _cache_low.begin();
-    // _cache_high_iter = _cache_high.begin();
-    // paramIter = _paramSet.fwdIterator();
-
-    _cache = true;
-    // cout << "Done with cache init." << endl;
-  }
-
   while((param=(RooAbsReal*)paramIter.next())) {
-    // low = (RooAbsReal*)lowIter.next() ;
-    // high = (RooAbsReal*)highIter.next() ;
-    // cout << "about to get first cache vaules."<< endl;
-    // double low  = *(_cache_low_iter++);
-    // double high = *(_cache_high_iter++);
-    double low  = ((RooAbsReal*)lowIter.next())->getVal();
-    double high = ((RooAbsReal*)highIter.next())->getVal();
-    //cout << param->GetName() << ": High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
+    low = (RooAbsReal*)lowIter.next() ;
+    high = (RooAbsReal*)highIter.next() ;
 
     Int_t icode = _interpCode[i] ;
 
@@ -200,28 +171,28 @@ Double_t PiecewiseInterpolation::evaluate() const
     case 0: {
       // piece-wise linear
       if(param->getVal()>0)
-	sum +=  param->getVal()*(high - nominal );
+	sum +=  param->getVal()*(high->getVal() - nominal );
       else
-	sum += param->getVal()*(nominal - low);
+	sum += param->getVal()*(nominal - low->getVal());
       break ;
     }
     case 1: {
       // pice-wise log
       if(param->getVal()>=0)
-	sum *= pow(high/nominal, +param->getVal());
+	sum *= pow(high->getVal()/nominal, +param->getVal());
       else
-	sum *= pow(low/nominal,  -param->getVal());
+	sum *= pow(low->getVal()/nominal,  -param->getVal());
       break ;
     }
     case 2: {
       // parabolic with linear
-      double a = 0.5*(high+low)-nominal;
-      double b = 0.5*(high-low);
+      double a = 0.5*(high->getVal()+low->getVal())-nominal;
+      double b = 0.5*(high->getVal()-low->getVal());
       double c = 0;
       if(param->getVal()>1 ){
-	sum += (2*a+b)*(param->getVal()-1)+high-nominal;
+	sum += (2*a+b)*(param->getVal()-1)+high->getVal()-nominal;
       } else if(param->getVal()<-1 ) {
-	sum += -1*(2*a-b)*(param->getVal()+1)+low-nominal;
+	sum += -1*(2*a-b)*(param->getVal()+1)+low->getVal()-nominal;
       } else {
 	sum +=  a*pow(param->getVal(),2) + b*param->getVal()+c;
       }
@@ -229,13 +200,13 @@ Double_t PiecewiseInterpolation::evaluate() const
     }
     case 3: {
       //parabolic version of log-normal
-      double a = 0.5*(high+low)-nominal;
-      double b = 0.5*(high-low);
+      double a = 0.5*(high->getVal()+low->getVal())-nominal;
+      double b = 0.5*(high->getVal()-low->getVal());
       double c = 0;
       if(param->getVal()>1 ){
-	sum += (2*a+b)*(param->getVal()-1)+high-nominal;
+	sum += (2*a+b)*(param->getVal()-1)+high->getVal()-nominal;
       } else if(param->getVal()<-1 ) {
-	sum += -1*(2*a-b)*(param->getVal()+1)+low-nominal;
+	sum += -1*(2*a-b)*(param->getVal()+1)+low->getVal()-nominal;
       } else {
 	sum +=  a*pow(param->getVal(),2) + b*param->getVal()+c;
       }
@@ -248,30 +219,24 @@ Double_t PiecewiseInterpolation::evaluate() const
       // WVE *** Do not modify unless you know what you are doing...      ***
       // WVE ****************************************************************
 
-      if( high == nominal  &&  low == nominal ) {
-        // this is just always zero, so just skip everything, especially the param->getVal() call
-        break;
-      }
-
       double x  = param->getVal();      
-      double val = 0.0;
       if (x>1) {
-        val = nominal + x*(high - nominal );
+	sum += x*(high->getVal() - nominal );
       } else if (x<-1) {
-        val = nominal + x*(nominal - low);
+	sum += x*(nominal - low->getVal());
       } else {
-        double eps_plus = high - nominal;
-        double eps_minus = nominal - low;
-        double S = (eps_plus + eps_minus)/2;
-        double A = (eps_plus - eps_minus)/16;
+	double eps_plus = high->getVal() - nominal;
+	double eps_minus = nominal - low->getVal();
+	double S = (eps_plus + eps_minus)/2;
+	double A = (eps_plus - eps_minus)/16;
 	
-        //fcns+der+2nd_der are eq at bd
-        double xx = x*x ;
-        double xxxx = xx*xx ;
-        val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
+	//fcns+der+2nd_der are eq at bd
+	double xx = x*x ;
+	double xxxx = xx*xx ;
+	double val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
+	//if (val < 0) val = 0;
+	sum += val-nominal;
       }
-      //if( val < 0 ) val = 0;
-      sum += val-nominal;
       break ;
 
       // WVE ****************************************************************
@@ -284,14 +249,14 @@ Double_t PiecewiseInterpolation::evaluate() const
       if (x > x0 || x < -x0)
       {
 	if(x>0)
-	  sum += x*(high - nominal );
+	  sum += x*(high->getVal() - nominal );
 	else
-	  sum += x*(nominal - low);
+	  sum += x*(nominal - low->getVal());
       }
       else if (nominal != 0)
       {
-	double eps_plus = high - nominal;
-	double eps_minus = nominal - low;
+	double eps_plus = high->getVal() - nominal;
+	double eps_minus = nominal - low->getVal();
 	double S = (eps_plus + eps_minus)/2;
 	double A = (eps_plus - eps_minus)/2;
 
