@@ -190,7 +190,7 @@ Double_t PiecewiseInterpolation::evaluate() const
     // cout << "about to get first cache vaules."<< endl;
     double low  = *(_cache_low_iter++);
     double high = *(_cache_high_iter++);
-    cout << param->GetName() << ": High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
+    //cout << param->GetName() << ": High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
 
     Int_t icode = _interpCode[i] ;
 
