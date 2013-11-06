@@ -169,8 +169,12 @@ Double_t PiecewiseInterpolation::evaluate() const
 
   if( !_cache ){
     while((param=(RooAbsReal*)paramIter.next())) {
-      _cache_low.push_back( ((RooAbsReal*)lowIter.next())->getVal() );
-      _cache_high.push_back( ((RooAbsReal*)highIter.next())->getVal() );
+      double low  = ((RooAbsReal*)lowIter.next())->getVal();
+      double high = ((RooAbsReal*)highIter.next())->getVal();
+      if( low  < 1e-30  &&  low  > -1e-30 ) low = 0.0;
+      if( high < 1e-30  &&  high > -1e-30 ) high = 0.0;
+      _cache_low.push_back( low );
+      _cache_high.push_back( high );
     }
     _cache_low_iter = _cache_low.begin();
     _cache_high_iter = _cache_high.begin();
@@ -186,7 +190,7 @@ Double_t PiecewiseInterpolation::evaluate() const
     // cout << "about to get first cache vaules."<< endl;
     double low  = *(_cache_low_iter++);
     double high = *(_cache_high_iter++);
-    // cout << "High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
+    cout << param->GetName() << ": High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
 
     Int_t icode = _interpCode[i] ;
 
@@ -244,21 +248,21 @@ Double_t PiecewiseInterpolation::evaluate() const
 
       double x  = param->getVal();      
       if (x>1) {
-	sum += x*(high - nominal );
+      	sum += x*(high - nominal );
       } else if (x<-1) {
-	sum += x*(nominal - low);
+        sum += x*(nominal - low);
       } else {
-	double eps_plus = high - nominal;
-	double eps_minus = nominal - low;
-	double S = (eps_plus + eps_minus)/2;
-	double A = (eps_plus - eps_minus)/16;
+        double eps_plus = high - nominal;
+        double eps_minus = nominal - low;
+        double S = (eps_plus + eps_minus)/2;
+        double A = (eps_plus - eps_minus)/16;
 	
-	//fcns+der+2nd_der are eq at bd
-	double xx = x*x ;
-	double xxxx = xx*xx ;
-	double val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
-	if (val < 0) val = 0;
-	sum += val-nominal;
+        //fcns+der+2nd_der are eq at bd
+        double xx = x*x ;
+        double xxxx = xx*xx ;
+        double val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
+        //if (val < 0) val = 0;
+        sum += val-nominal;
       }
       break ;
 
