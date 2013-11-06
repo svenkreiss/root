@@ -168,17 +168,17 @@ Double_t PiecewiseInterpolation::evaluate() const
   vector<double>::iterator _cache_high_iter = _cache_high.begin();
 
   if( !_cache ){
-    while((param=(RooAbsReal*)paramIter.next())) {
-      double low  = ((RooAbsReal*)lowIter.next())->getVal();
-      double high = ((RooAbsReal*)highIter.next())->getVal();
-      _cache_low.push_back( low );
-      _cache_high.push_back( high );
+    // while((param=(RooAbsReal*)paramIter.next())) {
+    //   double low  = ((RooAbsReal*)lowIter.next())->getVal();
+    //   double high = ((RooAbsReal*)highIter.next())->getVal();
+    //   _cache_low.push_back( low );
+    //   _cache_high.push_back( high );
 
-      //cout << param->GetName() << " caching: High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
-    }
-    _cache_low_iter = _cache_low.begin();
-    _cache_high_iter = _cache_high.begin();
-    paramIter = _paramSet.fwdIterator();
+    //   //cout << param->GetName() << " caching: High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
+    // }
+    // _cache_low_iter = _cache_low.begin();
+    // _cache_high_iter = _cache_high.begin();
+    // paramIter = _paramSet.fwdIterator();
 
     _cache = true;
     // cout << "Done with cache init." << endl;
@@ -188,8 +188,10 @@ Double_t PiecewiseInterpolation::evaluate() const
     // low = (RooAbsReal*)lowIter.next() ;
     // high = (RooAbsReal*)highIter.next() ;
     // cout << "about to get first cache vaules."<< endl;
-    double low  = *(_cache_low_iter++);
-    double high = *(_cache_high_iter++);
+    // double low  = *(_cache_low_iter++);
+    // double high = *(_cache_high_iter++);
+    double low  = ((RooAbsReal*)lowIter.next())->getVal();
+    double high = ((RooAbsReal*)highIter.next())->getVal();
     //cout << param->GetName() << ": High: " << high <<" low: " << low << " nominal: "<< nominal << endl;
 
     Int_t icode = _interpCode[i] ;
@@ -268,7 +270,7 @@ Double_t PiecewiseInterpolation::evaluate() const
         double xxxx = xx*xx ;
         val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
       }
-      if( val < 0 ) val = 0;
+      //if( val < 0 ) val = 0;
       sum += val-nominal;
       break ;
 
