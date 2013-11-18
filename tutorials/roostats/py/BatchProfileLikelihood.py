@@ -36,6 +36,7 @@ parser.add_option(      "--minOptimizeConst", help="NLL optimize const", dest="m
 parser.add_option(      "--reorderParameters", help="Execution order: swap x and y to scan in vertical stripes instead of horizontal. Give index of POIs like 1,0.", dest="reorderParameters", default=False)
 parser.add_option(      "--reversedParameters", help="Execution order reversed. Give index of POIs like 0,2.", dest="reversedParameters", default=False)
 parser.add_option(      "--enableOffset", help="enable likelihood offsetting", dest="enableOffset", default=False, action="store_true")
+parser.add_option(      "--evaluateWithoutOffset", help="evaluate without likelihood offsetting", dest="evaluateWithoutOffset", default=False, action="store_true")
 
 parser.add_option("-q", "--quiet", dest="verbose", action="store_false", default=True, help="Quiet output.")
 options,args = parser.parse_args()
@@ -253,14 +254,15 @@ def main():
       ROOT.RooFit.Constrain(params), 
       ROOT.RooFit.Offset(options.enableOffset),
    )
-   nllNoOffset = mc.GetPdf().createNLL(
-      data, 
-      ROOT.RooFit.CloneData(ROOT.kFALSE), 
-      ROOT.RooFit.Constrain(params), 
-      ROOT.RooFit.Offset(False),
-   )
    nll.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
-   nllNoOffset.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
+   if options.evaluateWithoutOffset:
+      nllNoOffset = mc.GetPdf().createNLL(
+         data, 
+         ROOT.RooFit.CloneData(ROOT.kFALSE), 
+         ROOT.RooFit.Constrain(params), 
+         ROOT.RooFit.Offset(False),
+      )
+      nllNoOffset.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
    if options.enableOffset:
       print( "Get NLL once. This first call sets the offset, so it is important that this happens when the parameters are at their initial values." )
       print( "nll = "+str( nll.getVal() ) )
@@ -303,9 +305,12 @@ def main():
       print( "--- unconditional fit ---" )
       preFit( w, mc, nll )
       minimize( nll )
+      nllVal = None
+      if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()
+      else:                             nllVal = nll.getVal()
 
       # build result line
-      result = "ucmles -- nll="+str(nllNoOffset.getVal())+", "
+      result = "ucmles -- nll="+str(nllVal)+", "
       # poi values
       result += ", ".join( [poiL.at(p).GetName()+"="+str(poiL.at(p).getVal()) for p in range(poiL.getSize())] )
       # nuisance parameter values if requested
@@ -326,14 +331,18 @@ def main():
       print( "Parameters Of Interest: "+str([ poiL.at(p).getVal() for p in range(poiL.getSize()) ]) )
       preFit( w, mc, nll )
       f,w,mc,data = helperModifyModelConfig.callHooks( options, f,w,mc,data, type="preConditionalFit" )
-      nllVal = nllNoOffset.getVal()
+      nllVal = None
+      if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()
+      else:                             nllVal = nll.getVal()
       if options.skipOnInvalidNll and (nllVal > 1e30  or  nllVal != nllVal):
          print( "WARNING: nll value invalid. Skipping minimization was requested." )
       else:
          minimize( nll )
+         if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()
+         else:                             nllVal = nll.getVal()
       
       # build result line
-      result = "nll="+str(nllNoOffset.getVal())+", "
+      result = "nll="+str(nllVal)+", "
       # poi values
       result += ", ".join( [poiL.at(p).GetName()+"="+str(poiL.at(p).getVal()) for p in range(poiL.getSize())] )
       # nuisance parameter values if requested
