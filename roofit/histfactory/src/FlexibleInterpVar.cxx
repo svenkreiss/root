@@ -53,7 +53,7 @@ FlexibleInterpVar::FlexibleInterpVar()
 //_____________________________________________________________________________
 FlexibleInterpVar::FlexibleInterpVar(const char* name, const char* title, 
 		       const RooArgList& paramList, 
-		       double nominal, vector<double> low, vector<double> high) :
+		       Double_t nominal, vector<double> low, vector<double> high) :
   RooAbsReal(name, title),
   _paramList("paramList","List of paramficients",this),
   _nominal(nominal), _low(low), _high(high), _interpBoundary(1.)
@@ -77,6 +77,49 @@ FlexibleInterpVar::FlexibleInterpVar(const char* name, const char* title,
   delete paramIter ;
 
 }
+
+//_____________________________________________________________________________
+FlexibleInterpVar::FlexibleInterpVar(const char* name, const char* title, 
+		       const RooArgList& paramList, 
+		       double nominal, const RooArgList& low, const RooArgList& high) :
+  RooAbsReal(name, title),
+  _paramList("paramList","List of paramficients",this),
+  _nominal(nominal), _interpBoundary(1.)
+{
+
+  RooFIter lowIter = low.fwdIterator() ;
+  RooAbsReal* val ; 
+  while ((val = (RooAbsReal*) lowIter.next())) {
+    _low.push_back(val->getVal()) ;
+  }
+
+  RooFIter highIter = high.fwdIterator() ;
+  while ((val = (RooAbsReal*) highIter.next())) {
+    _high.push_back(val->getVal()) ;
+  }
+  
+  
+  _logInit = kFALSE ;
+  _paramIter = _paramList.createIterator() ;
+
+
+  TIterator* paramIter = paramList.createIterator() ;
+  RooAbsArg* param ;
+  while((param = (RooAbsArg*)paramIter->Next())) {
+    if (!dynamic_cast<RooAbsReal*>(param)) {
+      coutE(InputArguments) << "FlexibleInterpVar::ctor(" << GetName() << ") ERROR: paramficient " << param->GetName() 
+			    << " is not of type RooAbsReal" << endl ;
+      assert(0) ;
+    }
+    _paramList.add(*param) ;
+    _interpCode.push_back(0); // default code
+  }
+  delete paramIter ;
+
+}
+
+
+
 
 //_____________________________________________________________________________
 FlexibleInterpVar::FlexibleInterpVar(const char* name, const char* title, 
@@ -331,7 +374,7 @@ Double_t FlexibleInterpVar::evaluate() const
 	double pow_up_log   = _high[i] <= 0.0 ? 0.0 : pow_up*_logHi[i] ;
 	double pow_down_log = _low[i] <= 0.0 ? 0.0 : -pow_down*_logLo[i] ;
 	double pow_up_log2  = _high[i] <= 0.0 ? 0.0 : pow_up_log*_logHi[i] ;
-	double pow_down_log2= _low[i] <= 0.0 ? 0.0 : -pow_down_log*_logLo[i] ; // -1 * -1 = +1
+	double pow_down_log2= _low[i] <= 0.0 ? 0.0 : -pow_down_log*_logLo[i] ;
 	/*
 	double pow_up       = pow(_high[i]/_nominal, x0);
 	double pow_down     = pow(_low[i]/_nominal,  x0);
