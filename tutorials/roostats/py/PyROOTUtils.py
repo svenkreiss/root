@@ -111,7 +111,7 @@ class Graph( ROOT.TGraph ):
          if len(x) < 1:
             print( "WARNING: trying to create a TGraph without points." )
    
-         ROOT.TGraph.__init__( self, len(x), array('f',x), array('f',y) )
+         ROOT.TGraph.__init__( self, len(x), array('d',x), array('d',y) )
          
       if nameTitle: self.SetNameTitle( nameTitle, nameTitle )
       if name: self.SetName( name )
@@ -162,6 +162,33 @@ class Graph( ROOT.TGraph ):
          p = ( ROOT.Double(), ROOT.Double() )
          self.GetPoint( i, p[0], p[1] )
          self.SetPoint( i, p[0], function(p[1]) )
+
+   def derivativeData( self ):
+      """ Returns x,y values such that in can be used in Graph constructor. """
+      values = []
+      for i in range( 1, self.GetN() ):
+         p1 = ( ROOT.Double(), ROOT.Double() )
+         self.GetPoint( i-1, p1[0], p1[1] )
+         p2 = ( ROOT.Double(), ROOT.Double() )
+         self.GetPoint( i,   p2[0], p2[1] )
+
+         values.append(  ((p1[0]+p2[0])/2.0, (p2[1]-p1[1])/abs(p2[0]-p1[0]) ) )
+      return values
+
+   def derivative2Data( self ):
+      """ Returns x,y values such that in can be used in Graph constructor. """
+      values = []
+      for i in range( 1, self.GetN()-1 ):
+         p1 = ( ROOT.Double(), ROOT.Double() )
+         self.GetPoint( i-1, p1[0], p1[1] )
+         p2 = ( ROOT.Double(), ROOT.Double() )
+         self.GetPoint( i,   p2[0], p2[1] )
+         p3 = ( ROOT.Double(), ROOT.Double() )
+         self.GetPoint( i+1, p3[0], p3[1] )
+
+         point = ( (p1[0]+p3[0])/2.0, (p3[1]-2*p2[1]+p1[1])/(abs(p3[0]-p2[0])*abs(p2[0]-p1[0])) )
+         values.append(  point  )
+      return values
 
    def scale( self, factor ):
       self.transformY( lambda y: y*factor )
@@ -384,16 +411,16 @@ class Band( ROOT.TGraph ):
       if style=="full":
          band_values =  sorted([(v[0],v[1]) for v in zip(x,yLow)])
          band_values += sorted([(v[0],v[1]) for v in zip(x,yHigh)], reverse=True)
-         ROOT.TGraph.__init__( self, len(band_values), array('f',[v[0] for v in band_values]), array('f',[v[1] for v in band_values]) )
+         ROOT.TGraph.__init__( self, len(band_values), array('d',[v[0] for v in band_values]), array('d',[v[1] for v in band_values]) )
          self.SetLineWidth(0)
          
       if style=="upperEdge":
          band_values = [(v[0],v[1]) for v in zip(x,yHigh)]
-         ROOT.TGraph.__init__( self, len(band_values), array('f',[v[0] for v in band_values]), array('f',[v[1] for v in band_values]) )
+         ROOT.TGraph.__init__( self, len(band_values), array('d',[v[0] for v in band_values]), array('d',[v[1] for v in band_values]) )
       
       if style=="lowerEdge":
          band_values = [(v[0],v[1]) for v in zip(x,yLow)]
-         ROOT.TGraph.__init__( self, len(band_values), array('f',[v[0] for v in band_values]), array('f',[v[1] for v in band_values]) )
+         ROOT.TGraph.__init__( self, len(band_values), array('d',[v[0] for v in band_values]), array('d',[v[1] for v in band_values]) )
 
       if fillColor:
          self.SetFillColor( fillColor )
