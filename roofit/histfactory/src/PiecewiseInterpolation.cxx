@@ -234,7 +234,7 @@ Double_t PiecewiseInterpolation::evaluate() const
 	double xx = x*x ;
 	double xxxx = xx*xx ;
 	double val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
-	//if (val < 0) val = 0;
+	if (val < 0) val = 0;
 	sum += val-nominal;
       }
       break ;
