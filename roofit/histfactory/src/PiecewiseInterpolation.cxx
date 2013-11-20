@@ -220,10 +220,11 @@ Double_t PiecewiseInterpolation::evaluate() const
       // WVE ****************************************************************
 
       double x  = param->getVal();      
+      double val = 0;
       if (x>1) {
-	sum += x*(high->getVal() - nominal );
+	val = nominal + x*(high->getVal() - nominal );
       } else if (x<-1) {
-	sum += x*(nominal - low->getVal());
+	val = nominal + x*(nominal - low->getVal());
       } else {
 	double eps_plus = high->getVal() - nominal;
 	double eps_minus = nominal - low->getVal();
@@ -233,10 +234,10 @@ Double_t PiecewiseInterpolation::evaluate() const
 	//fcns+der+2nd_der are eq at bd
 	double xx = x*x ;
 	double xxxx = xx*xx ;
-	double val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
-	if (val < 0) val = 0;
-	sum += val-nominal;
+	val = nominal + S*x + A*(15*xx - 10*xxxx + 3*xxxx*xx);
       }
+      if (val < 0) val = 0;
+      sum += val-nominal;
       break ;
 
       // WVE ****************************************************************
