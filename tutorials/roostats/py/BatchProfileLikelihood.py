@@ -41,6 +41,10 @@ parser.add_option(      "--evaluateWithoutOffset", help="evaluate without likeli
 parser.add_option("-q", "--quiet", dest="verbose", action="store_false", default=True, help="Quiet output.")
 options,args = parser.parse_args()
 
+import sys
+print( ' '.join(sys.argv) )
+print( '' )
+
 # to calculate unconditionalFitInSeparateJob, reduce options.jobs by one to make room for the extra job
 if options.unconditionalFitInSeparateJob: options.jobs -= 1
 
