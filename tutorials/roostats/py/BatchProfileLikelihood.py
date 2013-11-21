@@ -250,6 +250,13 @@ def main():
    ROOT.Math.MinimizerOptions.SetDefaultPrintLevel(-1)
    #ROOT.Math.MinimizerOptions.SetDefaultTolerance(0.0001)
 
+   if options.verbose:
+      print( "--- main pdf to use ---" )
+      print( mc.GetPdf() )
+      print( mc.GetPdf().GetName() )
+      print( mc.GetPdf().ClassName() )
+      print( "" )
+
    params = mc.GetPdf().getParameters(data)
    ROOT.RooStats.RemoveConstantParameters(params)
    nll = mc.GetPdf().createNLL(
