@@ -303,11 +303,11 @@ def main():
 
    # unconditional fit
    if (not options.unconditionalFitInSeparateJob) or \
+      preFit( w, mc, nll )
       (options.unconditionalFitInSeparateJob and options.counter == options.jobs):
       for p in range( poiL.getSize() ): poiL.at(p).setConstant(False)
       print( "" )
       print( "--- unconditional fit ---" )
-      preFit( w, mc, nll )
       minimize( nll )
       nllVal = None
       if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()
@@ -329,11 +329,11 @@ def main():
    # conditional fits
    for p in range( poiL.getSize() ): poiL.at(p).setConstant()
    for i in range( firstPoint,lastPoint ):
+      preFit( w, mc, nll )
       parametersNCube( poiL, i, options.reversedParameters, options.reorderParameters )
       print( "" )
       print( "--- next point: "+str(i)+" ---" )
       print( "Parameters Of Interest: "+str([ poiL.at(p).getVal() for p in range(poiL.getSize()) ]) )
-      preFit( w, mc, nll )
       f,w,mc,data = helperModifyModelConfig.callHooks( options, f,w,mc,data, type="preConditionalFit" )
       nllVal = None
       if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()
