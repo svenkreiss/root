@@ -303,8 +303,8 @@ def main():
 
    # unconditional fit
    if (not options.unconditionalFitInSeparateJob) or \
-      preFit( w, mc, nll )
       (options.unconditionalFitInSeparateJob and options.counter == options.jobs):
+      preFit( w, mc, nll )
       for p in range( poiL.getSize() ): poiL.at(p).setConstant(False)
       print( "" )
       print( "--- unconditional fit ---" )
