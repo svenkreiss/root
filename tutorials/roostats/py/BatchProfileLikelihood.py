@@ -229,6 +229,18 @@ def main():
    
    f,w,mc,data = helperModifyModelConfig.apply( options, f,w,mc,data )
 
+   if options.verbose:
+      print( "--- main pdf to use ---" )
+      print( mc.GetPdf() )
+      print( mc.GetPdf().GetName() )
+      print( mc.GetPdf().ClassName() )
+      print( "" )
+      print( "--- data to use ---" )
+      print( data )
+      print( data.GetName() )
+      print( data.ClassName() )
+      print( "" )
+
    firstPOI = mc.GetParametersOfInterest().first()
    poiL = ROOT.RooArgList( mc.GetParametersOfInterest() )
    nuisL = ROOT.RooArgList( mc.GetNuisanceParameters() )
@@ -242,20 +254,13 @@ def main():
    if not options.verbose:
       ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.FATAL)
    
-   ROOT.RooAbsReal.defaultIntegratorConfig().method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D")
+   # ROOT.RooAbsReal.defaultIntegratorConfig().method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D")
 
    ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Minimize")
    ROOT.Math.MinimizerOptions.SetDefaultStrategy(options.minStrategy)
    #ROOT.Math.MinimizerOptions.SetDefaultPrintLevel(1)
    ROOT.Math.MinimizerOptions.SetDefaultPrintLevel(-1)
    #ROOT.Math.MinimizerOptions.SetDefaultTolerance(0.0001)
-
-   if options.verbose:
-      print( "--- main pdf to use ---" )
-      print( mc.GetPdf() )
-      print( mc.GetPdf().GetName() )
-      print( mc.GetPdf().ClassName() )
-      print( "" )
 
    params = mc.GetPdf().getParameters(data)
    ROOT.RooStats.RemoveConstantParameters(params)
