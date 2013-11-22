@@ -268,7 +268,7 @@ def main():
       data, 
       ROOT.RooFit.CloneData(ROOT.kFALSE), 
       ROOT.RooFit.Constrain(params), 
-      RooFit::GlobalObservables(mc.GetGlobalObservables()),
+      ROOT.RooFit.GlobalObservables(mc.GetGlobalObservables()),
       ROOT.RooFit.Offset(options.enableOffset),
    )
    nll.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
@@ -277,7 +277,7 @@ def main():
          data, 
          ROOT.RooFit.CloneData(ROOT.kFALSE), 
          ROOT.RooFit.Constrain(params), 
-         RooFit::GlobalObservables(mc.GetGlobalObservables()),
+         ROOT.RooFit.GlobalObservables(mc.GetGlobalObservables()),
          ROOT.RooFit.Offset(False),
       )
       nllNoOffset.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
