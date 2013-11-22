@@ -254,7 +254,7 @@ def main():
    if not options.verbose:
       ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.FATAL)
    
-   # ROOT.RooAbsReal.defaultIntegratorConfig().method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D")
+   ROOT.RooAbsReal.defaultIntegratorConfig().method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D")
 
    ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Minimize")
    ROOT.Math.MinimizerOptions.SetDefaultStrategy(options.minStrategy)
@@ -268,6 +268,7 @@ def main():
       data, 
       ROOT.RooFit.CloneData(ROOT.kFALSE), 
       ROOT.RooFit.Constrain(params), 
+      RooFit::GlobalObservables(mc.GetGlobalObservables()),
       ROOT.RooFit.Offset(options.enableOffset),
    )
    nll.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
@@ -276,6 +277,7 @@ def main():
          data, 
          ROOT.RooFit.CloneData(ROOT.kFALSE), 
          ROOT.RooFit.Constrain(params), 
+         RooFit::GlobalObservables(mc.GetGlobalObservables()),
          ROOT.RooFit.Offset(False),
       )
       nllNoOffset.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
