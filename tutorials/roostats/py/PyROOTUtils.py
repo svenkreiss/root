@@ -334,6 +334,8 @@ class Graph( ROOT.TGraph ):
       if not minX: minX = self.argminX()
             
       mInterval = self.getFirstIntersectionsWithValue( up, xCenter=minX, xRange=xRange, steps=steps )
+      if not mInterval[0]: mInterval = (0,mInterval[1])
+      if not mInterval[1]: mInterval = (mInterval[0],0)
       fF = "%."+str(digits)+"f"   # float Format
       return ( (fF+"^{+"+fF+"}_{"+fF+"}") % (minX,mInterval[1]-minX,mInterval[0]-minX) )
       
