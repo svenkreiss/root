@@ -395,6 +395,30 @@ class CrossMarker( ROOT.TMarker ):
 
 
 
+def nonLinearSmooth(h2):
+   """ Non-linear smoothing of 2D histogram. This is essentially a 2D median filter. """
+   for x in range( h2.GetNbinsX()-2 ):
+      for y in range( h2.GetNbinsY()-2 ):
+         centerBin = x+2 + (y+2)*(h2.GetNbinsX()+2)
+         surroundingBins = [
+            centerBin-1, #this row
+            centerBin+1,
+            centerBin-1 - (h2.GetNbinsX()+2), # row above
+            centerBin   - (h2.GetNbinsX()+2),
+            centerBin+1 - (h2.GetNbinsX()+2),
+            centerBin-1 + (h2.GetNbinsX()+2), # row below
+            centerBin   + (h2.GetNbinsX()+2),
+            centerBin+1 + (h2.GetNbinsX()+2),
+         ]
+         surroundingBinValues = [ h2.GetBinContent(b) for b in surroundingBins ]
+         if h2.GetBinContent(centerBin) < min(surroundingBinValues)  or  \
+            h2.GetBinContent(centerBin) > max(surroundingBinValues):
+               h2.SetBinContent(centerBin, sum(surroundingBinValues)/8.0)
+
+
+
+
+
 class Band( ROOT.TGraph ):
    def __init__( self, x, yLow, yHigh, style="full", fillColor=None, lineColor=None, lineStyle=None, lineWidth=None, shiftBand=None ):
       """Possible styles: full, upperEdge, lowerEdge"""
