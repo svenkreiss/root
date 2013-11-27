@@ -41,6 +41,10 @@ parser.add_option(      "--evaluateWithoutOffset", help="evaluate without likeli
 parser.add_option("-q", "--quiet", dest="verbose", action="store_false", default=True, help="Quiet output.")
 options,args = parser.parse_args()
 
+import sys
+print( ' '.join(sys.argv) )
+print( '' )
+
 # to calculate unconditionalFitInSeparateJob, reduce options.jobs by one to make room for the extra job
 if options.unconditionalFitInSeparateJob: options.jobs -= 1
 
@@ -225,6 +229,18 @@ def main():
    
    f,w,mc,data = helperModifyModelConfig.apply( options, f,w,mc,data )
 
+   if options.verbose:
+      print( "--- main pdf to use ---" )
+      print( mc.GetPdf() )
+      print( mc.GetPdf().GetName() )
+      print( mc.GetPdf().ClassName() )
+      print( "" )
+      print( "--- data to use ---" )
+      print( data )
+      print( data.GetName() )
+      print( data.ClassName() )
+      print( "" )
+
    firstPOI = mc.GetParametersOfInterest().first()
    poiL = ROOT.RooArgList( mc.GetParametersOfInterest() )
    nuisL = ROOT.RooArgList( mc.GetNuisanceParameters() )
@@ -252,6 +268,7 @@ def main():
       data, 
       ROOT.RooFit.CloneData(ROOT.kFALSE), 
       ROOT.RooFit.Constrain(params), 
+      ROOT.RooFit.GlobalObservables(mc.GetGlobalObservables()),
       ROOT.RooFit.Offset(options.enableOffset),
    )
    nll.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
@@ -260,6 +277,7 @@ def main():
          data, 
          ROOT.RooFit.CloneData(ROOT.kFALSE), 
          ROOT.RooFit.Constrain(params), 
+         ROOT.RooFit.GlobalObservables(mc.GetGlobalObservables()),
          ROOT.RooFit.Offset(False),
       )
       nllNoOffset.setEvalErrorLoggingMode(ROOT.RooAbsReal.CountErrors)
@@ -300,10 +318,10 @@ def main():
    # unconditional fit
    if (not options.unconditionalFitInSeparateJob) or \
       (options.unconditionalFitInSeparateJob and options.counter == options.jobs):
+      preFit( w, mc, nll )
       for p in range( poiL.getSize() ): poiL.at(p).setConstant(False)
       print( "" )
       print( "--- unconditional fit ---" )
-      preFit( w, mc, nll )
       minimize( nll )
       nllVal = None
       if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()
@@ -325,11 +343,11 @@ def main():
    # conditional fits
    for p in range( poiL.getSize() ): poiL.at(p).setConstant()
    for i in range( firstPoint,lastPoint ):
+      preFit( w, mc, nll )
       parametersNCube( poiL, i, options.reversedParameters, options.reorderParameters )
       print( "" )
       print( "--- next point: "+str(i)+" ---" )
       print( "Parameters Of Interest: "+str([ poiL.at(p).getVal() for p in range(poiL.getSize()) ]) )
-      preFit( w, mc, nll )
       f,w,mc,data = helperModifyModelConfig.callHooks( options, f,w,mc,data, type="preConditionalFit" )
       nllVal = None
       if options.evaluateWithoutOffset: nllVal = nllNoOffset.getVal()

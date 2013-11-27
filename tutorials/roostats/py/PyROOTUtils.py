@@ -334,6 +334,8 @@ class Graph( ROOT.TGraph ):
       if not minX: minX = self.argminX()
             
       mInterval = self.getFirstIntersectionsWithValue( up, xCenter=minX, xRange=xRange, steps=steps )
+      if not mInterval[0]: mInterval = (0,mInterval[1])
+      if not mInterval[1]: mInterval = (mInterval[0],0)
       fF = "%."+str(digits)+"f"   # float Format
       return ( (fF+"^{+"+fF+"}_{"+fF+"}") % (minX,mInterval[1]-minX,mInterval[0]-minX) )
       
@@ -388,6 +390,59 @@ class CrossMarker( ROOT.TMarker ):
       )
 
       self.container.append( (t1,t2) )
+
+
+
+
+
+def nonLinearSmooth(h2):
+   """ Non-linear smoothing of 2D histogram. This is essentially a 2D median filter. """
+   for x in range( h2.GetNbinsX()-2 ):
+      for y in range( h2.GetNbinsY()-2 ):
+         centerBin = x+2 + (y+2)*(h2.GetNbinsX()+2)
+         surroundingBins = [
+            centerBin-1, #this row
+            centerBin+1,
+            centerBin-1 - (h2.GetNbinsX()+2), # row above
+            centerBin   - (h2.GetNbinsX()+2),
+            centerBin+1 - (h2.GetNbinsX()+2),
+            centerBin-1 + (h2.GetNbinsX()+2), # row below
+            centerBin   + (h2.GetNbinsX()+2),
+            centerBin+1 + (h2.GetNbinsX()+2),
+         ]
+         surroundingBinValues = [ h2.GetBinContent(b) for b in surroundingBins ]
+         if h2.GetBinContent(centerBin) < min(surroundingBinValues)  or  \
+            h2.GetBinContent(centerBin) > max(surroundingBinValues):
+               h2.SetBinContent(centerBin, sum(surroundingBinValues)/8.0)
+
+def subtractMinFromHist( h ):
+   minVal = 1e30
+   # exclude under- and overflow bins from minimum scan
+   for x in range( h.GetNbinsX() ):
+      for y in range( h.GetNbinsY() ):
+         bin = x+1 + (y+1)*(h.GetNbinsX()+2)
+         if h.GetBinContent(bin) < minVal: minVal = h.GetBinContent(bin)
+   for i in range( (h.GetNbinsX()+2)*(h.GetNbinsY()+2) ):
+      h.SetBinContent(i, h.GetBinContent(i)-minVal)
+   return h
+
+def interpolate( h, x, y=None, z=None, outOfRangeValue=30 ):
+   """ Interpolation is valid inside the volume defined by the outer bin _centers_. """
+
+   binWidth = (h.GetXaxis().GetXmax() - h.GetXaxis().GetXmin()) / h.GetXaxis().GetNbins()
+   if x < h.GetXaxis().GetXmin()+binWidth/2  or  x > h.GetXaxis().GetXmax()-binWidth/2: return outOfRangeValue
+   
+   if y != None:
+      binWidth = (h.GetYaxis().GetXmax() - h.GetYaxis().GetXmin()) / h.GetYaxis().GetNbins()
+      if y < h.GetYaxis().GetXmin()+binWidth/2  or  y > h.GetYaxis().GetXmax()-binWidth/2: return outOfRangeValue
+   if z != None:
+      binWidth = (h.GetZaxis().GetXmax() - h.GetZaxis().GetXmin()) / h.GetZaxis().GetNbins()
+      if z < h.GetZaxis().GetXmin()+binWidth/2  or  z > h.GetZaxis().GetXmax()-binWidth/2: return outOfRangeValue
+   
+   if y != None and z != None: return h.Interpolate( x, y, z )
+   if y != None: return h.Interpolate( x, y )
+   return h.Interpolate( x )
+
 
 
 
