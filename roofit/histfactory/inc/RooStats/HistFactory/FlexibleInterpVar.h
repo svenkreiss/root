@@ -42,6 +42,7 @@ namespace HistFactory{
     FlexibleInterpVar(const FlexibleInterpVar&, const char*);
 
     void setInterpCode(RooAbsReal& param, int code);
+    int getInterpCode(RooAbsReal& param);
     void setAllInterpCodes(int code);
     void setGlobalBoundary(double boundary) {_interpBoundary = boundary;}
     void setNominal(Double_t newNominal);
