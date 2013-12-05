@@ -198,6 +198,19 @@ void FlexibleInterpVar::setInterpCode(RooAbsReal& param, int code){
 }
 
 //_____________________________________________________________________________
+int FlexibleInterpVar::getInterpCode(RooAbsReal& param){
+
+  int index = _paramList.index(&param);
+  if(index<0){
+      coutE(InputArguments) << "FlexibleInterpVar::getInterpCode ERROR:  " << param.GetName() 
+                            << " is not in list" << endl ;
+      return -1;
+  }
+
+  return _interpCode.at(index);
+}
+
+//_____________________________________________________________________________
 void FlexibleInterpVar::setAllInterpCodes(int code){
 
   for(unsigned int i=0; i<_interpCode.size(); ++i){
