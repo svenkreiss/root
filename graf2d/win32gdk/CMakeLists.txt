@@ -105,6 +105,6 @@ endif()
 install(FILES  ${gdkdlla}
 			   ${glibdlla}
 			   ${iconvdlla}
-			   DESTINATION bin)
+			   DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 ROOT_INSTALL_HEADERS()

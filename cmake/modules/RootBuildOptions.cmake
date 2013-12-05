@@ -84,6 +84,7 @@ ROOT_BUILD_OPTION(exceptions ON "Turn on compiler exception handling capability"
 ROOT_BUILD_OPTION(explicitlink ${explicitlink_defvalue} "Explicitly link with all dependent libraries")
 ROOT_BUILD_OPTION(fftw3 ON "Fast Fourier Transform support, requires libfftw3")
 ROOT_BUILD_OPTION(fitsio ON "Read images and data from FITS files, requires cfitsio")
+ROOT_BUILD_OPTION(fortran ON "Enable the Fortran components of ROOT")
 ROOT_BUILD_OPTION(gviz ON "Graphs visualization support, requires graphviz")
 ROOT_BUILD_OPTION(gdml OFF "GDML writer and reader")
 ROOT_BUILD_OPTION(genvector ON "Build the new libGenVector library")
@@ -106,6 +107,7 @@ ROOT_BUILD_OPTION(pch ON)
 ROOT_BUILD_OPTION(peac ON "PEAC, PROOF Enabled Analysis Center, requires Clarens")
 ROOT_BUILD_OPTION(pgsql ON "PostgreSQL support, requires libpq")
 ROOT_BUILD_OPTION(pythia6 ON "Pythia6 EG support, requires libPythia6")
+ROOT_BUILD_OPTION(pythia6_nolink OFF "Delayed linking of Pythia6 library")
 ROOT_BUILD_OPTION(pythia8 ON "Pythia8 EG support, requires libPythia8")
 ROOT_BUILD_OPTION(python ON "Python ROOT bindings, requires python >= 2.2")
 ROOT_BUILD_OPTION(qt OFF "Qt graphics backend, requires libqt >= 4.x")
@@ -122,6 +124,7 @@ ROOT_BUILD_OPTION(soversion OFF "Set version number in sonames (recommended)")
 ROOT_BUILD_OPTION(sqlite ON "SQLite support, requires libsqlite3")
 ROOT_BUILD_OPTION(srp ON "SRP support, requires SRP source tree")
 ROOT_BUILD_OPTION(ssl ON "SSL encryption support, requires openssl")
+ROOT_BUILD_OPTION(gnuinstall OFF "Perform installation following the GNU guidelines")
 ROOT_BUILD_OPTION(table OFF "Build libTable contrib library")
 ROOT_BUILD_OPTION(tmva ON "Build TMVA multi variate analysis library")
 ROOT_BUILD_OPTION(unuran OFF "UNURAN - package for generating non-uniform random numbers")
@@ -157,17 +160,10 @@ include_regular_expression("^[^.]+$|[.]h$|[.]icc$|[.]hxx$|[.]hpp$")
 #---Set all directories where to install parts of root up to now everything is installed ------
 #---according to the setting of CMAKE_INSTALL_DIR
 
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND NOT gnuinstall)
   message(STATUS "Setting default installation prefix CMAKE_INSTALL_PREFIX to ${ROOTSYS}")
   set(CMAKE_INSTALL_PREFIX ${ROOTSYS} CACHE PATH "Default installation of ROOT" FORCE)
 endif()
-
-#if(ROOT_INSTALL_DIR)
-#  set(CMAKE_INSTALL_PREFIX ${ROOT_INSTALL_DIR})
-#  add_definitions(-DR__HAVE_CONFIG)
-#else()
-#  set(CMAKE_INSTALL_PREFIX ${ROOTSYS})
-#endif()
 
 #---Add defines for CINT limits-----------------------------------------------------------------
 if(DEFINED CINTMAXSTRUCT)
@@ -180,19 +176,8 @@ if(DEFINED CINTLONGLINE)
   add_definitions(-DG__LONGLINE=${CINTLONGLINE})
 endif()
 
-
-set(ROOT_INSTALL_DIR ${CMAKE_INSTALL_PREFIX})
-set(BIN_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/bin)
-set(LIB_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/lib)
-set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/include)
-set(ETC_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/etc)
-set(DATA_INSTALL_DIR ${CMAKE_INSTALL_PREFIX})
-set(DOC_INSTALL_DIR ${CMAKE_INSTALL_PREFIX})
-set(MACRO_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/macro)
-set(SRC_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/src)
-set(ICON_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/icons)
-set(FONT_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/fonts)
-set(CINT_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/cint)
+#---Add Installation Variables------------------------------------------------------------------
+include(RootInstallDirs)
 
 
 

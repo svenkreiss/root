@@ -842,8 +842,13 @@ TGeoNavigator *TGeoManager::GetCurrentNavigator() const
    TGeoNavigator *nav = TTHREAD_TLS_GET(TGeoNavigator*,tnav);
    if (nav) return nav;
    Long_t threadId = TThread::SelfId();
+
+   TThread::Lock();
    NavigatorsMap_t::const_iterator it = fNavigators.find(threadId);
-   if (it == fNavigators.end()) return 0;
+   bool notfound = (it == fNavigators.end());
+   TThread::UnLock();
+   if (notfound) return 0;
+
    TGeoNavigatorArray *array = it->second;
    nav = array->GetCurrentNavigator();
    TTHREAD_TLS_SET(TGeoNavigator*,tnav,nav);
@@ -914,6 +919,7 @@ void TGeoManager::RemoveNavigator(const TGeoNavigator *nav)
       if (arr) {
          if ((TGeoNavigator*)arr->Remove((TObject*)nav)) {
             delete nav;
+            if (fMultiThread) TThread::UnLock();
             return;
          }
       }   
@@ -983,10 +989,13 @@ Int_t TGeoManager::ThreadId()
    Int_t ttid = TTHREAD_TLS_GET(Int_t,tid);
    if (ttid > -1) return ttid;
    if (gGeoManager && !gGeoManager->IsMultiThread()) return 0;
-   TGeoManager::ThreadsMapIt_t it = fgThreadId->find(TThread::SelfId());
-   if (it != fgThreadId->end()) return it->second;
-   // Map needs to be updated.
    TThread::Lock();
+   TGeoManager::ThreadsMapIt_t it = fgThreadId->find(TThread::SelfId());
+   if (it != fgThreadId->end()) {
+      TThread::UnLock();
+      return it->second;
+   }
+   // Map needs to be updated.
    (*fgThreadId)[TThread::SelfId()] = fgNumThreads;
    TTHREAD_TLS_SET(Int_t,tid,fgNumThreads);
    fgNumThreads++;
