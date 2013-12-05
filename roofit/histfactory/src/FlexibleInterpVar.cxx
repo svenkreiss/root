@@ -333,7 +333,8 @@ Double_t FlexibleInterpVar::evaluate() const
       // piece-wise log + parabolic
       if(param->getVal()>=boundary)
 	{
-	total *= pow(_high[i]/_nominal, +param->getVal());
+	if( _high[i] >= 0.0 ) total *= pow(_high[i]/_nominal, +param->getVal());
+        else total *= 0.0;
       }
       else if (param->getVal() < boundary && param->getVal() > -boundary && boundary != 0)
       {
@@ -369,8 +370,8 @@ Double_t FlexibleInterpVar::evaluate() const
 	// if( _high[i] == 0 ) _high[i] = 0.0001;
 
 	// GHL: Swagato's suggestions
-	double pow_up       = _powHi[i] ;
-	double pow_down     = _powLo[i] ;
+	double pow_up       = _powHi[i] <= 0.0 ? 0.0 : _powHi[i];
+	double pow_down     = _powLo[i] <= 0.0 ? 0.0 : _powLo[i];
 	double pow_up_log   = _high[i] <= 0.0 ? 0.0 : pow_up*_logHi[i] ;
 	double pow_down_log = _low[i] <= 0.0 ? 0.0 : -pow_down*_logLo[i] ;
 	double pow_up_log2  = _high[i] <= 0.0 ? 0.0 : pow_up_log*_logHi[i] ;
@@ -404,7 +405,8 @@ Double_t FlexibleInterpVar::evaluate() const
       }
       else if (param->getVal()<=-boundary)
 	{
-	total *= pow(_low[i]/_nominal,  -param->getVal());
+	if( _low[i] >= 0.0 ) total *= pow(_low[i]/_nominal,  -param->getVal());
+        else total *= 0.0;
       }
       break ;
     }
