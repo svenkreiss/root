@@ -2308,7 +2308,25 @@ Double_t TH1::Chi2TestX(const TH1* h2,  Double_t &chi2, Int_t &ndf, Int_t &igood
    }
    return 0;
 }
+//______________________________________________________________________________
+Double_t TH1::Chisquare(TF1 * func, Option_t *option) const
+{
+   // Compute and return the chisquare of this histogram with respect to a function
+   // The chisquare is computed by weighting each histogram point by the bin error
+   // By default the full range of the histogram is used. 
+   // Use option "R" for restricting the chisquare calculation to the given range of the function
 
+   if (!func) { 
+      Error("Chisquare","Function pointer is Null - return -1");
+      return -1;
+   }
+
+   TString opt(option); opt.ToUpper(); 
+   bool useRange = opt.Contains("R");
+   
+   return ROOT::Fit::Chisquare(*this, *func, useRange);
+
+}
 //______________________________________________________________________________
 Double_t TH1::ComputeIntegral()
 {
@@ -3663,7 +3681,7 @@ TFitResultPtr TH1::Fit(TF1 *f1 ,Option_t *option ,Option_t *goption, Double_t xx
 //     =====================
 //     The status of the fit can be obtained converting the TFitResultPtr to an integer
 //     independently if the fit option "S" is used or not:
-//     TFitResultPtr r = h=>Fit(myFunc,opt);
+//     TFitResultPtr r = h->Fit(myFunc,opt);
 //     Int_t fitStatus = r;
 //
 //     The fitStatus is 0 if the fit is OK (i.e no error occurred).
@@ -6165,6 +6183,11 @@ void  TH1::SmoothArray(Int_t nn, Double_t *xx, Int_t ntimes)
    // based on algorithm 353QH twice presented by J. Friedman
    // in Proc.of the 1974 CERN School of Computing, Norway, 11-24 August, 1974.
 
+   if (nn < 3 ) { 
+      if (gROOT) gROOT->Error("SmoothArray","Need at least 3 points for smoothing: n = %d",nn);
+      return; 
+   }
+
    Int_t ii, jj, ik, jk, kk, nn2;
    Double_t hh[6] = {0,0,0,0,0,0};
    Double_t *yy = new Double_t[nn];
@@ -6335,10 +6358,15 @@ void  TH1::Smooth(Int_t ntimes, Option_t *option)
       Error("Smooth","Smooth only supported for 1-d histograms");
       return;
    }
+   Int_t nbins = fXaxis.GetNbins();
+   if (nbins < 3) { 
+      Error("Smooth","Smooth only supported for histograms with >= 3 bins. Nbins = %d",nbins);
+      return;
+   }
+
    // delete buffer if it is there since it will become invalid
    if (fBuffer) BufferEmpty(1);
 
-   Int_t nbins = fXaxis.GetNbins();
    Int_t firstbin = 1, lastbin = nbins;
    TString opt = option;
    opt.ToLower();
@@ -8138,11 +8166,11 @@ void TH1::Sumw2(Bool_t flag)
       return;
    }
 
-      if (fSumw2.fN == fNcells) {
-         if (!fgDefaultSumw2 )
-            Warning("Sumw2","Sum of squares of weights structure already created");
-         return;
-      }
+   if (fSumw2.fN == fNcells) {
+      if (!fgDefaultSumw2 )
+         Warning("Sumw2","Sum of squares of weights structure already created");
+      return;
+   }
 
    fSumw2.Set(fNcells);
 
