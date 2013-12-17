@@ -9,7 +9,7 @@ __version__ = "0.1"
 import optparse
 parser = optparse.OptionParser(version="0.1")
 parser.add_option("-i", "--input", help="root file", type="string", dest="input", default="results/example_combined_GaussExample_model.root")
-parser.add_option("-o", "--output", help="output location", type="string", dest="output", default="docImages/")
+parser.add_option("-o", "--output", help="output location", type="string", dest="output", default="doc/images/")
 
 parser.add_option("-w", "--wsName", help="Workspace name", type="string", dest="wsName", default="combined")
 parser.add_option("-m", "--mcName", help="ModelConfig name", type="string", dest="mcName", default="ModelConfig")
