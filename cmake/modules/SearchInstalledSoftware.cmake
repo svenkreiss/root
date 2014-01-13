@@ -1,5 +1,6 @@
 #---Check for installed packages depending on the build options/components eamnbled -
 include(ExternalProject)
+include(FindPackageHandleStandardArgs)
 
 #---Check for Zlib ------------------------------------------------------------------
 if(NOT builtin_zlib)
@@ -266,17 +267,23 @@ endif()
 #---Check for OpenGL installation-------------------------------------------------------
 if(opengl)
   message(STATUS "Looking for OpenGL")
-  find_package(OpenGL)
-  if(NOT OPENGL_FOUND OR NOT OPENGL_GLU_FOUND)
+  if(APPLE AND NOT cocoa)
+    find_path(OPENGL_INCLUDE_DIR GL/gl.h  PATHS /usr/X11R6/include)
+    find_library(OPENGL_gl_LIBRARY NAMES GL PATHS /usr/X11R6/lib)
+    find_library(OPENGL_glu_LIBRARY NAMES GLU PATHS /usr/X11R6/lib)
+    find_package_handle_standard_args(OpenGL REQUIRED_VARS OPENGL_INCLUDE_DIR OPENGL_gl_LIBRARY OPENGL_glu_LIBRARY)
+    set(OPENGL_LIBRARIES ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY})
+    mark_as_advanced(OPENGL_INCLUDE_DIR OPENGL_glu_LIBRARY OPENGL_gl_LIBRARY)
+  else()
+    find_package(OpenGL)
+  endif()
+  if(NOT OPENGL_FOUND)
     if(fail-on-missing)
       message(FATAL_ERROR "OpenGL package not found and opengl option required")
     else()
       message(STATUS "OpenGL not found. Switching off opengl option")
       set(opengl OFF CACHE BOOL "" FORCE)
     endif()
-  endif()
-  if(APPLE)
-    find_path(OPENGL_INCLUDE_DIR GL/gl.h DOC "Include for OpenGL on OSX")
   endif()
 endif()
 
@@ -662,6 +669,22 @@ if(builtin_ftgl)
   set(FTGL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/graf3d/ftgl/inc)
   set(FTGL_CFLAGS -DBUILTIN_FTGL)
   set(FTGL_LIBRARIES FTGL)
+endif()
+
+#---Check for DavIx library-----------------------------------------------------------
+if(davix)
+  set(DAVIX_VERSION 0.2.7)
+  message(STATUS "Downloading and building Davix version ${DAVIX_VERSION}")
+    ExternalProject_Add(
+      DAVIX
+      URL http://grid-deployment.web.cern.ch/grid-deployment/dms/lcgutil/tar/davix/davix-${DAVIX_VERSION}.tar.gz
+      INSTALL_DIR ${CMAKE_BINARY_DIR}
+      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DLIB_SUFFIX=
+    )
+    set(DAVIX_INCLUDE_DIR ${CMAKE_BINARY_DIR}/include/davix)
+    set(DAVIX_LIBRARY -L${CMAKE_BINARY_DIR}/lib -ldavix)
+    set(DAVIX_INCLUDE_DIRS ${DAVIX_INCLUDE_DIR})
+    set(DAVIX_LIBRARIES ${DAVIX_LIBRARY})
 endif()
 
 
