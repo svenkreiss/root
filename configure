@@ -143,7 +143,7 @@ for c in $options ; do eval ${c}_explicit="" ; done
 enable_cxx11=no
 enable_libcxx=no
 enable_cling=no
-enable_cocoa=no
+enable_cocoa=
 enable_afs=no
 enable_alloc=no
 enable_gdml=no
@@ -2509,6 +2509,12 @@ fi
 if test ! "x$platform" = "xmacosx"; then
     enable_cocoa="no"
 fi
+if test "x$macosx108" = "xyes" && test "x$enable_cocoa" = "x"; then
+   enable_cocoa="yes"
+fi
+if test "x$enable_cocoa" = "x"; then
+   enable_cocoa="no"
+fi
 
 hascocoa="undef"
 if test "x$enable_cocoa" = "xyes"; then
@@ -2954,8 +2960,8 @@ if test ! "x$enable_opengl" = "xno" && test ! "x$platform" = "xwin32" ; then
     opengllibdir=$found_dir
 
     if test ! "x$macosx105" = "x" && test "x$macosx106" = "x" ; then
-	# Mac OS X 10.5 problem
-	opengllib="-dylib_file /usr/X11R6/lib/libGL.dylib:/usr/X11R6/lib/libGL.dylib -lGL"
+       # Mac OS X 10.5 problem
+       opengllib="-dylib_file /usr/X11R6/lib/libGL.dylib:/usr/X11R6/lib/libGL.dylib -lGL"
     fi
 
     skipchecklibcxxcompat="yes"
@@ -3001,7 +3007,7 @@ check_explicit "$enable_opengl" "$enable_opengl_explicit" \
 # (see http://homepages.paradise.net.nz/henryj/code/index.html#FTGL)
 #
 if test ! "x$enable_opengl" = "xno" && test ! "x$platform" = "xwin32" ; then
-   ftglincdir=include
+   ftglincdir=
    ftgllibdir=-Llib
    ftgllibs=-lFTGL
    if test "x$enable_builtin_ftgl" = "x" || \
@@ -3060,7 +3066,7 @@ if test "x$platform" = "xwin32"; then
    glewlibs=lib/libGLEW.lib
 
    enable_builtin_ftgl="yes"
-   ftglincdir=include
+   ftglincdir=
    ftgllibdir=
    ftgllibs=lib/libFTGL.lib
 fi
@@ -4079,7 +4085,7 @@ if test ! "x$enable_davix" = "xno" ; then
     davixincdir=$found_dir
 
     check_library "libdavix" "$enable_shared" "$davixlibdir" \
-        $DAVIX ${DAVIX:+$DAVIX/lib} \
+        $DAVIX ${DAVIX:+$DAVIX/lib} ${DAVIX:+$DAVIX/lib64} \
         /usr/lib /usr/local
     davixlib=$found_lib
     davixlibdir=$found_dir

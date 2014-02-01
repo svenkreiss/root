@@ -58,7 +58,7 @@ TH2::TH2(const char *name,const char *title,Int_t nbinsx,Double_t xlow,Double_t 
    fDimension   = 2;
    fScalefactor = 1;
    fTsumwy      = fTsumwy2 = fTsumwxy = 0;
-   if (nbinsy <= 0) nbinsy = 1;
+   if (nbinsy <= 0) {Warning("TH2","nbinsy is <=0 - set to nbinsy = 1"); nbinsy = 1; }
    fYaxis.Set(nbinsy,ylow,yup);
    fNcells      = fNcells*(nbinsy+2); // fNCells is set in the TH1 constructor
 }
@@ -72,7 +72,7 @@ TH2::TH2(const char *name,const char *title,Int_t nbinsx,const Double_t *xbins
    fDimension   = 2;
    fScalefactor = 1;
    fTsumwy      = fTsumwy2 = fTsumwxy = 0;
-   if (nbinsy <= 0) nbinsy = 1;
+   if (nbinsy <= 0) {Warning("TH2","nbinsy is <=0 - set to nbinsy = 1"); nbinsy = 1; }
    fYaxis.Set(nbinsy,ylow,yup);
    fNcells      = fNcells*(nbinsy+2); // fNCells is set in the TH1 constructor
 }
@@ -86,7 +86,7 @@ TH2::TH2(const char *name,const char *title,Int_t nbinsx,Double_t xlow,Double_t 
    fDimension   = 2;
    fScalefactor = 1;
    fTsumwy      = fTsumwy2 = fTsumwxy = 0;
-   if (nbinsy <= 0) nbinsy = 1;
+   if (nbinsy <= 0) {Warning("TH2","nbinsy is <=0 - set to nbinsy = 1"); nbinsy = 1; }
    if (ybins) fYaxis.Set(nbinsy,ybins);
    else       fYaxis.Set(nbinsy,0,1);
    fNcells      = fNcells*(nbinsy+2); // fNCells is set in the TH1 constructor
@@ -101,7 +101,7 @@ TH2::TH2(const char *name,const char *title,Int_t nbinsx,const Double_t *xbins
    fDimension   = 2;
    fScalefactor = 1;
    fTsumwy      = fTsumwy2 = fTsumwxy = 0;
-   if (nbinsy <= 0) nbinsy = 1;
+   if (nbinsy <= 0) {Warning("TH2","nbinsy is <=0 - set to nbinsy = 1"); nbinsy = 1; }
    if (ybins) fYaxis.Set(nbinsy,ybins);
    else       fYaxis.Set(nbinsy,0,1);
    fNcells      = fNcells*(nbinsy+2); // fNCells is set in the TH1 constructor
@@ -116,7 +116,7 @@ TH2::TH2(const char *name,const char *title,Int_t nbinsx,const Float_t *xbins
    fDimension   = 2;
    fScalefactor = 1;
    fTsumwy      = fTsumwy2 = fTsumwxy = 0;
-   if (nbinsy <= 0) nbinsy = 1;
+   if (nbinsy <= 0) {Warning("TH2","nbinsy is <=0 - set to nbinsy = 1"); nbinsy = 1; }
    if (ybins) fYaxis.Set(nbinsy,ybins);
    else       fYaxis.Set(nbinsy,0,1);
    fNcells      = fNcells*(nbinsy+2); // fNCells is set in the TH1 constructor.
@@ -987,17 +987,23 @@ void TH2::GetRandom2(Double_t &x, Double_t &y)
 {
    // return 2 random numbers along axis x and y distributed according
    // the cellcontents of a 2-dim histogram
+   // return a NaN if the histogram has a bin with negative content
 
    Int_t nbinsx = GetNbinsX();
    Int_t nbinsy = GetNbinsY();
    Int_t nbins  = nbinsx*nbinsy;
    Double_t integral;
+   // compute integral checking that all bins have positive content (see ROOT-5894)
    if (fIntegral) {
-      if (fIntegral[nbins+1] != fEntries) integral = ComputeIntegral();
+      if (fIntegral[nbins+1] != fEntries) integral = ComputeIntegral(true);
+      else integral = fIntegral[nbins];
    } else {
-      integral = ComputeIntegral();
-      if (integral == 0 || fIntegral == 0) return;
+      integral = ComputeIntegral(true);
    }
+   if (integral == 0 ) { x = 0; y = 0; return;}
+   // case histogram has negative bins
+   if (integral == TMath::QuietNaN() ) { x = TMath::QuietNaN(); y = TMath::QuietNaN(); return;}
+
    Double_t r1 = gRandom->Rndm();
    Int_t ibin = TMath::BinarySearch(nbins,fIntegral,(Double_t) r1);
    Int_t biny = ibin/nbinsx;

@@ -2256,6 +2256,7 @@ Int_t TGCocoa::OpenPixmap(UInt_t w, UInt_t h)
    newSize.width = w;
    newSize.height = h;
 
+   //TODO: what about multi-head setup?
    Util::NSScopeGuard<QuartzPixmap> pixmap([[QuartzPixmap alloc] initWithW : w H : h scaleFactor : [[NSScreen mainScreen] backingScaleFactor]]);
    if (pixmap.Get()) {
       pixmap.Get().fID = fPimpl->RegisterDrawable(pixmap.Get());//Can throw.
@@ -2278,6 +2279,7 @@ Int_t TGCocoa::ResizePixmap(Int_t wid, UInt_t w, UInt_t h)
    if (w == pixmap.fWidth && h == pixmap.fHeight)
       return 1;
    
+   //TODO: what about multi-head setup?
    if ([pixmap resizeW : w H : h scaleFactor : [[NSScreen mainScreen] backingScaleFactor]])//This can throw std::bad_alloc, ok, no resource will leak.
       return 1;
 
@@ -2853,9 +2855,10 @@ ULong_t TGCocoa::GetPixel(Color_t rootColorIndex)
 }
 
 //______________________________________________________________________________
-void TGCocoa::GetPlanes(Int_t & /*nplanes*/)
+void TGCocoa::GetPlanes(Int_t &nPlanes)
 {
-   // Returns the maximum number of planes.
+   //Implemented as NSBitsPerPixelFromDepth([mainScreen depth]);
+   nPlanes = GetDepth();
 }
 
 //______________________________________________________________________________
@@ -3097,6 +3100,7 @@ Double_t TGCocoa::GetOpenGLScalingFactor()
    //Scaling factor to let our OpenGL code know, that we probably
    //work on a retina display.
    
+   //TODO: what about multi-head setup?
    return [[NSScreen mainScreen] backingScaleFactor];
 }
 
@@ -3368,6 +3372,7 @@ void TGCocoa::SetDoubleBufferON()
          return;
    }
 
+   //TODO: what about multi-head setup?
    Util::NSScopeGuard<QuartzPixmap> pixmap([[QuartzPixmap alloc] initWithW : currW H : currH scaleFactor : [[NSScreen mainScreen] backingScaleFactor]]);
    if (pixmap.Get()) {
       window.fBackBuffer = pixmap.Get();

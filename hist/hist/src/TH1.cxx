@@ -638,7 +638,7 @@ TH1::TH1(const char *name,const char *title,Int_t nbins,Double_t xlow,Double_t x
 //   -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*
 
    Build();
-   if (nbins <= 0) nbins = 1;
+   if (nbins <= 0) {Warning("TH1","nbins is <=0 - set to nbins = 1"); nbins = 1; }
    fXaxis.Set(nbins,xlow,xup);
    fNcells = fXaxis.GetNbins()+2;
 }
@@ -662,7 +662,7 @@ TH1::TH1(const char *name,const char *title,Int_t nbins,const Float_t *xbins)
 //
 //   -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*
    Build();
-   if (nbins <= 0) nbins = 1;
+   if (nbins <= 0) {Warning("TH1","nbins is <=0 - set to nbins = 1"); nbins = 1; }
    if (xbins) fXaxis.Set(nbins,xbins);
    else       fXaxis.Set(nbins,0,1);
    fNcells = fXaxis.GetNbins()+2;
@@ -687,7 +687,7 @@ TH1::TH1(const char *name,const char *title,Int_t nbins,const Double_t *xbins)
 //
 //   -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*
    Build();
-   if (nbins <= 0) nbins = 1;
+   if (nbins <= 0) {Warning("TH1","nbins is <=0 - set to nbins = 1"); nbins = 1; }
    if (xbins) fXaxis.Set(nbins,xbins);
    else       fXaxis.Set(nbins,0,1);
    fNcells = fXaxis.GetNbins()+2;
@@ -2337,7 +2337,7 @@ Double_t TH1::Chisquare(TF1 * func, Option_t *option) const
 
 }
 //______________________________________________________________________________
-Double_t TH1::ComputeIntegral()
+Double_t TH1::ComputeIntegral(Bool_t onlyPositive)
 {
    //  Compute integral (cumulative sum of bins)
    //  The result stored in fIntegral is used by the GetRandom functions.
@@ -2345,6 +2345,8 @@ Double_t TH1::ComputeIntegral()
    //  array does not exist or when the number of entries in the histogram
    //  has changed since the previous call to GetRandom.
    //  The resulting integral is normalized to 1
+   //  If the routine is called with the onlyPositive flag set an error will 
+   //  be produced in case of negative bin content and a NaN value returned
 
    Int_t bin, binx, biny, binz, ibin;
 
@@ -2366,7 +2368,13 @@ Double_t TH1::ComputeIntegral()
          for (binx=1;binx<=nbinsx;binx++) {
             ibin++;
             bin  = GetBin(binx, biny, binz);
-            fIntegral[ibin] = fIntegral[ibin-1] + GetBinContent(bin);
+            Double_t y = GetBinContent(bin); 
+            if (onlyPositive && y < 0) { 
+               Error("ComputeIntegral","Bin content is negative - return a NaN value");
+               fIntegral[nbins] = TMath::QuietNaN();
+               break;
+            }
+            fIntegral[ibin] = fIntegral[ibin-1] + y;
          }
       }
    }
@@ -4501,6 +4509,7 @@ Double_t TH1::GetRandom() const
    // The integral is automatically recomputed if the number of entries
    // is not the same then when the integral was computed.
    // NB Only valid for 1-d histograms. Use GetRandom2 or 3 otherwise.
+   // If the histogram has a bin with negative content a NaN is returned 
 
    if (fDimension > 1) {
       Error("GetRandom","Function only valid for 1-d histograms");
@@ -4508,13 +4517,16 @@ Double_t TH1::GetRandom() const
    }
    Int_t nbinsx = GetNbinsX();
    Double_t integral = 0;
+   // compute integral checking that all bins have positive content (see ROOT-5894)
    if (fIntegral) {
-      if (fIntegral[nbinsx+1] != fEntries) integral = ((TH1*)this)->ComputeIntegral();
+      if (fIntegral[nbinsx+1] != fEntries) integral = ((TH1*)this)->ComputeIntegral(true);
       else  integral = fIntegral[nbinsx];
    } else {
-      integral = ((TH1*)this)->ComputeIntegral();
+      integral = ((TH1*)this)->ComputeIntegral(true);
    }
    if (integral == 0) return 0;
+   // return a NaN in case some bins have negative content
+   if (integral == TMath::QuietNaN() ) return TMath::QuietNaN(); 
 
    Double_t r1 = gRandom->Rndm();
    Int_t ibin = TMath::BinarySearch(nbinsx,fIntegral,r1);
@@ -6725,6 +6737,7 @@ void TH1::SavePrimitive(ostream &out, Option_t *option /*= ""*/)
       histName += hcounter;
    }
    const char *hname = histName.Data();
+   if (!strlen(hname)) hname = "unnamed";
 
    TString t(GetTitle());
    t.ReplaceAll("\\","\\\\");
@@ -7371,7 +7384,11 @@ Double_t TH1::DoIntegral(Int_t binx1, Int_t binx2, Int_t biny1, Int_t biny2, Int
 Double_t TH1::KolmogorovTest(const TH1 *h2, Option_t *option) const
 {
    //  Statistical test of compatibility in shape between
-   //  THIS histogram and h2, using Kolmogorov test.
+   //  this histogram and h2, using Kolmogorov test.
+   //  Note that the KolmogorovTest (KS) test should in theory be used only for unbinned data
+   //  and not for binned data as in the case of the histogram (see NOTE 3 below). 
+   //  So, before using this method blindly, read the NOTE 3. 
+   //
    //
    //     Default: Ignore under- and overflow bins in comparison
    //
@@ -7433,6 +7450,10 @@ Double_t TH1::KolmogorovTest(const TH1 *h2, Option_t *option) const
    //  slightly too big. That is, setting an acceptance criterion of (PROB>0.05
    //  will assure that at most 5% of truly compatible histograms are rejected,
    //  and usually somewhat less."
+   //
+   //  Note also that for GoF test of unbinned data ROOT provides also the class
+   //  ROOT::Math::GoFTest. The class has also method for doing one sample tests
+   //  (i.e. comparing the data with a given distribution). 
 
    TString opt = option;
    opt.ToUpper();
@@ -8337,6 +8358,66 @@ Double_t TH1::GetCellError(Int_t binx, Int_t biny) const
 
    Int_t bin = GetBin(binx,biny);
    return GetBinError(bin);
+}
+
+//L.M. These following getters are useless and should be probably deprecated
+//______________________________________________________________________________
+Double_t TH1::GetBinCenter(Int_t bin) const 
+{
+   // return bin center for 1D historam
+   // Better to use h1.GetXaxis().GetBinCenter(bin)
+   
+   if (fDimension == 1) return  fXaxis.GetBinCenter(bin);
+   Error("GetBinCenter","Invalid method for a %d-d histogram - return a NaN",fDimension);
+   return TMath::QuietNaN();
+}
+
+//______________________________________________________________________________
+Double_t TH1::GetBinLowEdge(Int_t bin) const 
+{
+   // return bin lower edge for 1D historam
+   // Better to use h1.GetXaxis().GetBinLowEdge(bin)
+   
+   if (fDimension == 1) return  fXaxis.GetBinLowEdge(bin);
+   Error("GetBinLowEdge","Invalid method for a %d-d histogram - return a NaN",fDimension);
+   return TMath::QuietNaN();
+}
+
+//______________________________________________________________________________
+Double_t TH1::GetBinWidth(Int_t bin) const 
+{
+   // return bin width for 1D historam
+   // Better to use h1.GetXaxis().GetBinWidth(bin)
+   
+   if (fDimension == 1) return  fXaxis.GetBinWidth(bin);
+   Error("GetBinWidth","Invalid method for a %d-d histogram - return a NaN",fDimension);
+   return TMath::QuietNaN();
+}
+
+//______________________________________________________________________________
+void TH1::GetCenter(Double_t *center) const 
+{
+   // Fill array with center of bins for 1D histogram
+   // Better to use h1.GetXaxis().GetCenter(center)
+   
+   if (fDimension == 1) {
+      fXaxis.GetCenter(center);
+      return;
+   }
+   Error("GetCenter","Invalid method for a %d-d histogram ",fDimension);
+}
+
+//______________________________________________________________________________
+void TH1::GetLowEdge(Double_t *edge) const 
+{
+   // Fill array with low edge of bins for 1D histogram
+   // Better to use h1.GetXaxis().GetLowEdge(edge)
+   
+   if (fDimension == 1) {
+      fXaxis.GetLowEdge(edge);
+      return;
+   }
+   Error("GetLowEdge","Invalid method for a %d-d histogram ",fDimension);
 }
 
 //______________________________________________________________________________

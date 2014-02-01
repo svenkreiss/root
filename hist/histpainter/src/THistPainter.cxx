@@ -3195,8 +3195,8 @@ void THistPainter::ExecuteEvent(Int_t event, Int_t px, Int_t py)
       }
       x        = gPad->AbsPixeltoX(px);
       bin      = fXaxis->FindFixBin(gPad->PadtoX(x));
-      binwidth = fH->GetBinWidth(bin);
-      xlow     = gPad->XtoPad(fH->GetBinLowEdge(bin) + baroffset*binwidth);
+      binwidth = fXaxis->GetBinWidth(bin);
+      xlow     = gPad->XtoPad(fXaxis->GetBinLowEdge(bin) + baroffset*binwidth);
       xup      = gPad->XtoPad(xlow + barwidth*binwidth);
       ylow     = gPad->GetUymin();
       px1      = gPad->XtoAbsPixel(xlow);
@@ -4804,6 +4804,9 @@ void THistPainter::PaintCandlePlot(Option_t *)
    h2->TAttFill::Modify();
    h2->TAttLine::Modify();
    h2->TAttMarker::Modify();
+
+   delete [] prob;
+   delete [] quantiles;
 }
    
 
