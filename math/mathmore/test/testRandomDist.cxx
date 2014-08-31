@@ -12,7 +12,6 @@
 #include <iostream>
 #include <cmath>
 #include <typeinfo>
-#define HAVE_UNURAN
 #ifdef HAVE_UNURAN
 #include "UnuRanDist.h"
 #endif
@@ -21,11 +20,13 @@
 #include "CLHEP/Random/RandFlat.h"
 #include "CLHEP/Random/RandPoissonT.h"
 #include "CLHEP/Random/RandPoisson.h"
+#include "CLHEP/Random/RandPoissonQ.h"
 #include "CLHEP/Random/RandGauss.h"
 #include "CLHEP/Random/RandGaussQ.h"
 #include "CLHEP/Random/RandGaussT.h"
 #include "CLHEP/Random/RandBinomial.h"
 #include "CLHEP/Random/JamesRandom.h"
+#include "CLHEP/Random/MTwistEngine.h"
 #endif
 
 
@@ -35,8 +36,8 @@
 
 
 
-#ifndef NEVT
-#define NEVT 1000000
+#ifndef NEVT_DEFAULT
+#define NEVT_DEFAULT 1000000
 #endif
 
 //#define TEST_TIME
@@ -48,7 +49,7 @@ using namespace CLHEP;
 
 static bool fillHist = false;
 
-
+static int NEVT = NEVT_DEFAULT;
 
 void testDiff(TH1D & h1, TH1D & h2, const std::string & name="") { 
   
@@ -105,8 +106,8 @@ void testPoisson( R & r,double mu,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Poisson - mu = " << mu << "\t\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testPoisson(r,mu,h);
@@ -134,8 +135,8 @@ unsigned int genPoisson( R & r, double mu) {
     double x,y,v;
     do { 
       do { 
-	y = std::tan( pi * r.Rndm() );
-	x = sqm * y + m - 1.;
+         y = std::tan( pi * r.Rndm() );
+         x = sqm * y + m - 1.;
       }
       while (x <= 0); 
       v = r.Rndm(); 
@@ -201,8 +202,8 @@ unsigned int genPoisson2( R & r, double mu) {
     
     do {
       do {
-	y = std::tan(pi*r.Rndm());
-	em = sq*y + mu;
+         y = std::tan(pi*r.Rndm());
+         em = sq*y + mu;
       } while( em < 0.0 );
 
       em = std::floor(em);
@@ -234,8 +235,8 @@ void testPoisson2( R & r,double mu,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Poisson \t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testPoisson2(r,mu,h);
@@ -260,8 +261,8 @@ void testPoissonCLHEP( R & r, double mu,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Poisson - mu = " << mu << "\t\t" << findName(r) <<"\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+           << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testPoissonCLHEP(r,mu,h);
@@ -273,25 +274,27 @@ void testGausCLHEP( R & r,double mu,double sigma,TH1D & h) {
   TStopwatch w; 
 
   int n = NEVT;
-  int n1 = 100;
-  int n2 = n/n1;
+  // int n1 = 100;
+  // int n2 = n/n1;
   w.Start();
-  for (int i = 0; i < n2; ++i) { 
-     for (int j = 0; j < n1; ++j) { 
-    double x = r(mu,sigma );
-    if (fillHist)
-      h.Fill( x );
-
+  for (int i = 0; i < n; ++i) { 
+//     for (int j = 0; j < n1; ++j) { 
+     double x = r(mu,sigma );
+     if (fillHist)
+         h.Fill( x );
+     
   }
+  //}
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Gaussian - mu,sigma = " << mu << " , " << sigma << "\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testGausCLHEP(r,mu,sigma,h);
 }
+
 
 template <class R> 
 void testFlatCLHEP( R & r,TH1D & h) { 
@@ -310,11 +313,11 @@ void testFlatCLHEP( R & r,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Flat - [0,1]           \t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
-  testFlatCLHEP(r,h);
+  testFlatCLHEP<R>(r,h);
 }
 
 
@@ -339,8 +342,8 @@ void testFlat( R & r,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Flat - [0,1]       \t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testFlat(r,h);
@@ -366,8 +369,8 @@ void testGaus( R & r,double mu,double sigma,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Gaussian - mu,sigma = " << mu << " , " << sigma << "\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testGaus(r,mu,sigma,h);
@@ -393,8 +396,8 @@ void testLandau( R & r,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Landau " << "\t\t\t\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testLandau(r,h);
@@ -420,8 +423,8 @@ void testBreitWigner( R & r,double mu,double gamma,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Breit-Wigner - m,g = " << mu << " , " << gamma << "\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testBreitWigner(r,mu,gamma,h);
@@ -446,8 +449,8 @@ void testBinomial( R & r,int ntot,double p,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Binomial - ntot,p = " << ntot << " , " << p << "\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testBinomial(r,ntot,p,h);
@@ -471,8 +474,8 @@ void testBinomialCLHEP( R & r,int ntot,double p,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Binomial - ntot,p = " << ntot << " , " << p << "\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testBinomialCLHEP(r,ntot,p,h);
@@ -554,8 +557,8 @@ void testExp( R & r,TH1D & h) {
   w.Stop();
   if (fillHist) { fillHist=false; return; }  
   std::cout << "Exponential " << "\t\t\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
   // fill histogram the second pass
   fillHist = true; 
   testExp(r,h);
@@ -582,8 +585,8 @@ void testCircle( R & r,TH1D & h) {
   if (fillHist) { fillHist=false; return; }  
 
   std::cout << "Circle " << "\t\t\t\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;   
   // fill histogram the second pass
   fillHist = true; 
   testCircle(r,h);
@@ -645,8 +648,8 @@ void testSphere( R & r,TH1D & h1, TH1D & h2 ) {
   if (fillHist) { fillHist=false; return; }  
 
   std::cout << "Sphere " << "\t\t\t\t"<< findName(r) << "\tTime = " << w.RealTime()*1.0E9/NEVT << " \t" 
-	    << w.CpuTime()*1.0E9/NEVT 
-	    << "\t(ns/call)" << std::endl;   
+            << w.CpuTime()*1.0E9/NEVT
+            << "\t(ns/call)" << std::endl;
 
   // fill histogram the second pass
   fillHist = true; 
@@ -655,7 +658,10 @@ void testSphere( R & r,TH1D & h1, TH1D & h2 ) {
 }
 
 
-int testRandomDist() {
+int testRandomDist(int nevt = 0) {
+
+   // use given number of events if given 
+  if (nevt > 0) NEVT = nevt;
 
   std::cout << "***************************************************\n"; 
   std::cout << " TEST RANDOM DISTRIBUTIONS   NEVT = " << NEVT << std::endl;
@@ -683,10 +689,11 @@ int testRandomDist() {
   testDiff(hf1,hf2,"Flat ROOT-GSL");
 
 #ifdef HAVE_CLHEP
-  HepJamesRandom eng; 
+  //HepJamesRandom eng; 
+  MTwistEngine  eng;
   RandFlat crf(eng);
   TH1D hf3("hf3","Flat CLHEP",nch,xmin,xmax);
-  testFlatCLHEP(crf,hf3);
+  testFlatCLHEP<RandFlat>(crf,hf3);
   testDiff(hf3,hf1,"Flat CLHEP-GSL");
 #endif
 
@@ -695,7 +702,7 @@ int testRandomDist() {
   // Poisson 
   std::cout << std::endl; 
 
-  double mu = 25; 
+  double mu = 100; 
   xmin = std::floor(std::max(0.0,mu-5*std::sqrt(mu) ) );
   xmax = std::floor( mu+5*std::sqrt(mu) );
   nch = std::min( int(xmax-xmin),1000);
@@ -707,9 +714,15 @@ int testRandomDist() {
   testPoisson(tr,mu,hp2);
   testPoisson(ur,mu,hp3);
 #ifdef HAVE_CLHEP
-  RandPoissonT crp(eng);
+  RandPoisson crp(eng);
   TH1D hp4("hp4","Poisson CLHEP",nch,xmin,xmax);
   testPoissonCLHEP(crp,mu,hp4);
+  RandPoissonQ crpQ(eng);
+  TH1D hp5("hp5","PoissonQ CLHEP",nch,xmin,xmax);
+  testPoissonCLHEP(crpQ,mu,hp5);
+  RandPoissonT crpT(eng);
+  TH1D hp6("hp6","PoissonT CLHEP",nch,xmin,xmax);
+  testPoissonCLHEP(crpT,mu,hp6);
 #endif
   //testPoisson2(tr,mu,h2);
   // test differences 
@@ -717,6 +730,8 @@ int testRandomDist() {
   testDiff(hp1,hp3,"Poisson ROOT-UNR");
 #ifdef HAVE_CLHEP
   testDiff(hp1,hp4,"Poisson ROOT-CLHEP");
+  testDiff(hp1,hp5,"PoissonQ ROOT-CLHEP");
+  testDiff(hp1,hp6,"PoissonT ROOT-CLHEP");
 #endif
 
   // Gaussian
@@ -736,14 +751,21 @@ int testRandomDist() {
   TH1D hg4("hg4","Gauss CLHEP",nch,xmin,xmax);
   testGausCLHEP(crg,mu,sqrt(mu),hg4);
   RandGaussQ crgQ(eng);
-  testGausCLHEP(crgQ,mu,sqrt(mu),hg4);
+  TH1D hg5("hg5","Gauss CLHEP",nch,xmin,xmax);
+  testGausCLHEP(crgQ,mu,sqrt(mu),hg5);
   RandGaussT crgT(eng);
-  testGausCLHEP(crgT,mu,sqrt(mu),hg4);
+  TH1D hg6("hg6","Gauss CLHEP",nch,xmin,xmax);
+  testGausCLHEP(crgT,mu,sqrt(mu),hg6);
 #endif
 
 
   testDiff(hg1,hg2,"Gaussian ROOT-GSL");
   testDiff(hg1,hg3,"Gaussian ROOT_UNR");
+#ifdef HAVE_CLHEP
+  testDiff(hg1,hg4,"Gaussian ROOT-CLHEP");
+  testDiff(hg1,hg5,"GaussianQ ROOT-CLHEP");
+  testDiff(hg1,hg6,"GaussianT ROOT-CLHEP");
+#endif
 
   // Landau
   std::cout << std::endl; 
@@ -785,13 +807,15 @@ int testRandomDist() {
 #ifdef HAVE_CLHEP
   RandBinomial crb(eng);
   TH1D hb4("hb4","Binomial CLHEP",nch,xmin,xmax);
-  testBinomialCLHEP(crb,ntot,p,hp4);
+  testBinomialCLHEP(crb,ntot,p,hb4);
 #endif
 
 
   testDiff(hb1,hb2,"Binomial ROOT-GSL");
   testDiff(hb1,hb3,"Binomial ROOT-UNR");
-
+#ifdef HAVE_CLHEP
+  testDiff(hb1,hb4,"Binomial ROOT-CLHEP");
+#endif
   // multinomial
   std::cout << std::endl; 
 
@@ -844,6 +868,22 @@ int testRandomDist() {
 
 }
 
-int main() { 
-  return testRandomDist();
+int main(int argc, const char *argv[]) {
+
+   int nev = 0; 
+   // Parse command line arguments
+   for (Int_t i = 1 ;  i < argc ; i++) {
+      std::string arg = argv[i] ;
+
+      if (arg == "-n") {
+         nev = atoi(argv[++i]);
+         std::cout << "testRandomDist: use n = " << nev << std::endl;
+      } else if (arg == "-h") {
+         std::cout << "usage: testRandomDist [ options ] " << std::endl;
+         std::cout << "" << std::endl;
+         std::cout << "       -n N      : use number of generated events  N" << std::endl;
+      }
+   }
+
+   return testRandomDist(nev);
 }

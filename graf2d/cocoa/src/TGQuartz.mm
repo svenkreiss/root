@@ -43,6 +43,9 @@
 #include "TROOT.h"
 #include "TEnv.h"
 
+// To scale fonts to the same size as the TTF version
+const Float_t kScale = 0.93376068;
+
 ClassImp(TGQuartz)
 
 //TODO:
@@ -65,7 +68,8 @@ namespace Util = ROOT::MacOSX::Util;
 namespace {
 
 //______________________________________________________________________________
-void ConvertPointsROOTToCocoa(Int_t nPoints, const TPoint *xy, std::vector<TPoint> &dst, NSObject<X11Drawable> *drawable)
+void ConvertPointsROOTToCocoa(Int_t nPoints, const TPoint *xy, std::vector<TPoint> &dst,
+                              NSObject<X11Drawable> *drawable)
 {
    assert(nPoints != 0 && "ConvertPointsROOTToCocoa, nPoints parameter is 0");
    assert(xy != 0 && "ConvertPointsROOTToCocoa, xy parameter is null");
@@ -140,22 +144,26 @@ void TGQuartz::DrawBox(Int_t x1, Int_t y1, Int_t x2, Int_t y2, EBoxMode mode)
    //AA flag is not a part of a state.
    const Quartz::CGAAStateGuard aaCtxGuard(ctx, fUseAA);
 
-   const TColor * const fillColor = gROOT->GetColor(GetFillColor());
-   if (!fillColor) {
-      Error("DrawBox", "Fill color for index %d not found", GetFillColor());
-      return;
-   }
-
    //Go to low-left-corner system.
    y1 = Int_t(X11::LocalYROOTToCocoa(drawable, y1));
    y2 = Int_t(X11::LocalYROOTToCocoa(drawable, y2));
 
-   if (const TColorGradient * const extendedColor = dynamic_cast<const TColorGradient *>(fillColor)) {
+   if (const TColorGradient * const gradient = dynamic_cast<TColorGradient *>(gROOT->GetColor(GetFillColor()))) {
       //Draw a box with a gradient fill and a shadow.
       //Ignore all fill styles and EBoxMode, use a gradient fill.
-      Quartz::DrawBoxGradient(ctx, x1, y1, x2, y2, extendedColor, kTRUE);//kTRUE == draw a shadow.
+      TPoint polygon[4];
+      polygon[0].fX = x1, polygon[0].fY = y1;
+      polygon[1].fX = x2, polygon[1].fY = y1;
+      polygon[2].fX = x2, polygon[2].fY = y2;
+      polygon[3].fX = x1, polygon[3].fY = y2;
+      
+      Quartz::DrawPolygonWithGradientFill(ctx, gradient, CGSizeMake(drawable.fWidth, drawable.fHeight),
+                                          4, polygon, kFALSE); //kFALSE == don't draw a shadow.
    } else {
       const bool isHollow = mode == kHollow || GetFillStyle() / 1000 == 2;
+      
+      //Note! Pattern index (and its address) MUST live
+      //long enough to be valid at the point of Quartz::DrawBox call!
       unsigned patternIndex = 0;
       if (isHollow) {
          if (!Quartz::SetLineColor(ctx, GetLineColor())) {
@@ -184,12 +192,16 @@ void TGQuartz::DrawFillArea(Int_t n, TPoint *xy)
    // xy        : array of points
 
    //End of comment.
+   if (n < 3)
+      return;
 
    //Do some checks first.
    if (fDirectDraw)//To avoid warnings from Quartz - no context at the moment!
       return;
 
-   NSObject<X11Drawable> * const drawable = (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawFillArea");
+   NSObject<X11Drawable> * const drawable =
+               (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawFillArea");
+
    if (!drawable)
       return;
 
@@ -208,8 +220,9 @@ void TGQuartz::DrawFillArea(Int_t n, TPoint *xy)
       return;
    }
 
-   if (const TColorGradient * const extendedColor = dynamic_cast<const TColorGradient *>(fillColor)) {
-      Quartz::DrawFillAreaGradient(ctx, n, &fConvertedPoints[0], extendedColor, kTRUE);//kTRUE == draw a shadow.
+   if (const TColorGradient * const gradient = dynamic_cast<const TColorGradient *>(fillColor)) {
+      Quartz::DrawPolygonWithGradientFill(ctx, gradient, CGSizeMake(drawable.fWidth, drawable.fHeight),
+                                          n, &fConvertedPoints[0], kFALSE);//kFALSE == don't draw a shadow.
    } else {
       unsigned patternIndex = 0;
       if (!Quartz::SetFillAreaParameters(ctx, &patternIndex)) {
@@ -223,7 +236,8 @@ void TGQuartz::DrawFillArea(Int_t n, TPoint *xy)
 
 
 //______________________________________________________________________________
-void TGQuartz::DrawCellArray(Int_t /*x1*/, Int_t /*y1*/, Int_t /*x2*/, Int_t /*y2*/, Int_t /*nx*/, Int_t /*ny*/, Int_t */*ic*/)
+void TGQuartz::DrawCellArray(Int_t /*x1*/, Int_t /*y1*/, Int_t /*x2*/, Int_t /*y2*/,
+                             Int_t /*nx*/, Int_t /*ny*/, Int_t */*ic*/)
 {
    //Noop.
 }
@@ -244,7 +258,8 @@ void TGQuartz::DrawLine(Int_t x1, Int_t y1, Int_t x2, Int_t y2)
 
    //Do some checks first:
    assert(fSelectedDrawable > fPimpl->GetRootWindowID() && "DrawLine, bad drawable is selected");
-   NSObject<X11Drawable> * const drawable = (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawLine");
+   NSObject<X11Drawable> * const drawable =
+                     (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawLine");
    if (!drawable)
       return;
 
@@ -261,7 +276,8 @@ void TGQuartz::DrawLine(Int_t x1, Int_t y1, Int_t x2, Int_t y2)
    Quartz::SetLineStyle(ctx, GetLineStyle());
    Quartz::SetLineWidth(ctx, GetLineWidth());
 
-   Quartz::DrawLine(ctx, x1, X11::LocalYROOTToCocoa(drawable, y1), x2, X11::LocalYROOTToCocoa(drawable, y2));
+   Quartz::DrawLine(ctx, x1, X11::LocalYROOTToCocoa(drawable, y1), x2,
+                    X11::LocalYROOTToCocoa(drawable, y2));
 }
 
 
@@ -278,7 +294,8 @@ void TGQuartz::DrawPolyLine(Int_t n, TPoint *xy)
    if (fDirectDraw)//To avoid warnings from Quartz - no context at the moment!
       return;
 
-   NSObject<X11Drawable> * const drawable = (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawPolyLine");
+   NSObject<X11Drawable> * const drawable =
+                     (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawPolyLine");
    if (!drawable)
       return;
 
@@ -315,7 +332,8 @@ void TGQuartz::DrawPolyMarker(Int_t n, TPoint *xy)
    if (fDirectDraw)//To avoid warnings from Quartz - no context at the moment!
       return;
 
-   NSObject<X11Drawable> * const drawable = (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawPolyMarker");
+   NSObject<X11Drawable> * const drawable =
+                        (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawPolyMarker");
    if (!drawable)
       return;
       
@@ -340,7 +358,8 @@ void TGQuartz::DrawPolyMarker(Int_t n, TPoint *xy)
 
 
 //______________________________________________________________________________
-void TGQuartz::DrawText(Int_t x, Int_t y, Float_t /*angle*/, Float_t /*mgn*/, const char *text, ETextMode /*mode*/)
+void TGQuartz::DrawText(Int_t x, Int_t y, Float_t /*angle*/, Float_t /*mgn*/,
+                        const char *text, ETextMode /*mode*/)
 {
    if (fDirectDraw)//To avoid warnings from Quartz - no context at the moment!
       return;
@@ -351,7 +370,8 @@ void TGQuartz::DrawText(Int_t x, Int_t y, Float_t /*angle*/, Float_t /*mgn*/, co
    if (!GetTextSize())//Do not draw anything, or CoreText will create some small (but not of size 0 font).
       return;
    
-   NSObject<X11Drawable> * const drawable = (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawText");
+   NSObject<X11Drawable> * const drawable =
+                     (NSObject<X11Drawable> *)GetSelectedDrawableChecked("DrawText");
    if (!drawable)
       return;
 
@@ -362,7 +382,7 @@ void TGQuartz::DrawText(Int_t x, Int_t y, Float_t /*angle*/, Float_t /*mgn*/, co
    CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
 
    try {
-      if (CTFontRef currentFont = fPimpl->fFontManager.SelectFont(GetTextFont(), GetTextSize())) {
+      if (CTFontRef currentFont = fPimpl->fFontManager.SelectFont(GetTextFont(), kScale*GetTextSize())) {
          const unsigned fontIndex = GetTextFont() / 10;
          if (fontIndex == 12 || fontIndex == 15) {//Greek and math symbols.
             //This is a hack. Correct way is to extract glyphs from symbol.ttf,
@@ -431,8 +451,20 @@ void TGQuartz::GetTextExtent(UInt_t &w, UInt_t &h, char *text)
       return;
    }
    
-   if (fPimpl->fFontManager.SelectFont(GetTextFont(), GetTextSize()))
-      fPimpl->fFontManager.GetTextBounds(w, h, text);
+   if (fPimpl->fFontManager.SelectFont(GetTextFont(), kScale*GetTextSize())) {
+      const unsigned fontIndex = GetTextFont() / 10;
+      if (fontIndex == 12 || fontIndex == 15) {//Greek and math symbols.
+         typedef std::vector<UniChar>::size_type size_type;
+
+         std::vector<UniChar> unichars(std::strlen(text));
+         for (size_type i = 0, len = unichars.size(); i < len; ++i)
+            unichars[i] = 0xF000 + (unsigned char)text[i];
+         
+         fPimpl->fFontManager.GetTextBounds(w, h, unichars);
+      } else {
+         fPimpl->fFontManager.GetTextBounds(w, h, text);
+      }
+   }
 }
 
 //______________________________________________________________________________
@@ -441,8 +473,37 @@ Int_t TGQuartz::GetFontAscent() const
    // Returns the ascent of the current font (in pixels).
    // The ascent of a font is the distance from the baseline
    // to the highest position characters extend to.
-   if (fPimpl->fFontManager.SelectFont(GetTextFont(), GetTextSize()))
+   if (fPimpl->fFontManager.SelectFont(GetTextFont(), kScale*GetTextSize()))
       return Int_t(fPimpl->fFontManager.GetAscent());
+
+   return 0;
+}
+
+//______________________________________________________________________________
+Int_t TGQuartz::GetFontAscent(const char *text) const
+{
+   // Returns the ascent of the current font (in pixels).
+   // The ascent of a font is the distance from the baseline
+   // to the highest position characters extend to.
+   
+   //In case of any problem we can always resort to the old version:
+   if (!text || !text[0])//How it's usually tested in ROOT
+      return GetFontAscent();
+   
+   if (fPimpl->fFontManager.SelectFont(GetTextFont(), kScale*GetTextSize())) {
+      const unsigned fontIndex = GetTextFont() / 10;
+      if (fontIndex == 12 || fontIndex == 15) {//Greek and math symbols.
+         //That's an ugly hack :)
+         typedef std::vector<UniChar>::size_type size_type;
+
+         std::vector<UniChar> unichars(std::strlen(text));
+         for (size_type i = 0, len = unichars.size(); i < len; ++i)
+            unichars[i] = 0xF000 + (unsigned char)text[i];
+         
+         return Int_t(fPimpl->fFontManager.GetAscent(unichars));
+      } else
+         return Int_t(fPimpl->fFontManager.GetAscent(text));
+   }
 
    return 0;
 }
@@ -453,8 +514,37 @@ Int_t TGQuartz::GetFontDescent() const
    // Returns the descent of the current font (in pixels.
    // The descent is the distance from the base line
    // to the lowest point characters extend to.
-   if (fPimpl->fFontManager.SelectFont(GetTextFont(), GetTextSize()))
+   if (fPimpl->fFontManager.SelectFont(GetTextFont(), kScale*GetTextSize()))
       return Int_t(fPimpl->fFontManager.GetDescent());
+
+   return 0;
+}
+
+//______________________________________________________________________________
+Int_t TGQuartz::GetFontDescent(const char *text) const
+{
+   // Returns the descent of the current font (in pixels.
+   // The descent is the distance from the base line
+   // to the lowest point characters extend to.
+
+   //That's how it's tested in ROOT:
+   if (!text || !text[0])
+      return GetFontDescent();
+
+   if (fPimpl->fFontManager.SelectFont(GetTextFont(), kScale*GetTextSize())) {
+      const unsigned fontIndex = GetTextFont() / 10;
+      if (fontIndex == 12 || fontIndex == 15) {//Greek and math symbols.
+         //That's an ugly hack :)
+         typedef std::vector<UniChar>::size_type size_type;
+
+         std::vector<UniChar> unichars(std::strlen(text));
+         for (size_type i = 0, len = unichars.size(); i < len; ++i)
+            unichars[i] = 0xF000 + (unsigned char)text[i];
+         
+         return Int_t(fPimpl->fFontManager.GetDescent(unichars));
+      } else
+         return Int_t(fPimpl->fFontManager.GetDescent(text));
+   }
 
    return 0;
 }
@@ -574,7 +664,8 @@ void TGQuartz::SetTextFont(Font_t fontNumber)
 //______________________________________________________________________________
 Int_t TGQuartz::SetTextFont(char *fontName, ETextSetMode /*mode*/)
 {
-   //This function is never used in gPad (in normal text rendering, so I'm not setting anything for CoreText).
+   //This function is never used in gPad (in normal text rendering,
+   //so I'm not setting anything for CoreText).
    if (!TTF::IsInitialized()) {
       Error("SetTextFont", "TTF is not initialized");
       return 0;

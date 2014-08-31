@@ -1459,15 +1459,14 @@ Long64_t TH2::Merge(TCollection *list)
    TAxis newYAxis;
    Bool_t initialLimitsFound = kFALSE;
    Bool_t allSameLimits = kTRUE;
+   Bool_t sameLimitsX = kTRUE;
+   Bool_t sameLimitsY = kTRUE;
    Bool_t allHaveLimits = kTRUE;
-   Bool_t firstNonEmptyHist = kTRUE;
+   Bool_t firstHistWithLimits = kTRUE;
 
    TIter next(&inlist);
    TH2 * h = this;
    do  {
-      // skip empty histograms 
-      if (h->fTsumw == 0 && h->GetEntries() == 0) continue;
-
       Bool_t hasLimits = h->GetXaxis()->GetXmin() < h->GetXaxis()->GetXmax();
       allHaveLimits = allHaveLimits && hasLimits;
 
@@ -1476,52 +1475,63 @@ Long64_t TH2::Merge(TCollection *list)
 
          // this is done in case the first histograms are empty and 
          // the histogram have different limits
-         if (firstNonEmptyHist ) { 
-            // set axis limits in the case the first histogram was empty
+         if (firstHistWithLimits ) { 
+            // set axis limits in the case the first histogram did not have limits
             if (h != this ) { 
-               if (!SameLimitsAndNBins(fXaxis, *(h->GetXaxis())) ) 
-                  fXaxis.Set(h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXmin(),h->GetXaxis()->GetXmax());
-               if (!SameLimitsAndNBins(fYaxis, *(h->GetYaxis())) ) 
-                  fYaxis.Set(h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXmin(),h->GetYaxis()->GetXmax());
+              if (!SameLimitsAndNBins(fXaxis, *(h->GetXaxis())) ) {
+                if (h->GetXaxis()->GetXbins()->GetSize() != 0) fXaxis.Set(h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXbins()->GetArray());
+                else                                           fXaxis.Set(h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXmin(), h->GetXaxis()->GetXmax());
+              }
+              if (!SameLimitsAndNBins(fYaxis, *(h->GetYaxis())) ) {
+                if (h->GetYaxis()->GetXbins()->GetSize() != 0) fYaxis.Set(h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXbins()->GetArray());
+                else                                           fYaxis.Set(h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXmin(), h->GetYaxis()->GetXmax());
+              }
             }
-            firstNonEmptyHist = kFALSE;     
+            firstHistWithLimits = kFALSE;
          }
 
          if (!initialLimitsFound) {
             // this is executed the first time an histogram with limits is found
             // to set some initial values on the new axes
             initialLimitsFound = kTRUE;
-            newXAxis.Set(h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXmin(),
-               h->GetXaxis()->GetXmax());
-            newYAxis.Set(h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXmin(),
-               h->GetYaxis()->GetXmax());
+            if (h->GetXaxis()->GetXbins()->GetSize() != 0) newXAxis.Set(h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXbins()->GetArray());
+            else                                           newXAxis.Set(h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXmin(), h->GetXaxis()->GetXmax());
+            if (h->GetYaxis()->GetXbins()->GetSize() != 0) newYAxis.Set(h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXbins()->GetArray());
+            else                                           newYAxis.Set(h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXmin(), h->GetYaxis()->GetXmax());
          }
          else {
-            // check first if histograms have same bins 
-            if (!SameLimitsAndNBins(newXAxis, *(h->GetXaxis())) || 
-                !SameLimitsAndNBins(newYAxis, *(h->GetYaxis())) ) { 
-               
-               allSameLimits = kFALSE;
-               // recompute in this case the optimal limits
-               // The condition to works is that the histogram have same bin with 
-               // and one common bin edge
-               if (!RecomputeAxisLimits(newXAxis, *(h->GetXaxis()))) {
-                  Error("Merge", "Cannot merge histograms - limits are inconsistent:\n "
-                        "first: (%d, %f, %f), second: (%d, %f, %f)",
-                        newXAxis.GetNbins(), newXAxis.GetXmin(), newXAxis.GetXmax(),
-                        h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXmin(),
-                        h->GetXaxis()->GetXmax());
-                  return -1;
-               }
-               if (!RecomputeAxisLimits(newYAxis, *(h->GetYaxis()))) {
-                  Error("Merge", "Cannot merge histograms - limits are inconsistent:\n "
-                        "first: (%d, %f, %f), second: (%d, %f, %f)",
-                        newYAxis.GetNbins(), newYAxis.GetXmin(), newYAxis.GetXmax(),
-                        h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXmin(),
-                        h->GetYaxis()->GetXmax());
-                  return -1;
-               }
-            }
+           // check first if histograms have same bins in X
+           if (!SameLimitsAndNBins(newXAxis, *(h->GetXaxis()))) {
+             sameLimitsX = kFALSE;
+             // recompute in this case the optimal limits
+             // The condition to works is that the histogram have same bin with
+             // and one common bin edge
+             if (!RecomputeAxisLimits(newXAxis, *(h->GetXaxis()))) {
+               Error("Merge", "Cannot merge histograms - limits are inconsistent:\n "
+                     "first: (%d, %f, %f), second: (%d, %f, %f)",
+                     newXAxis.GetNbins(), newXAxis.GetXmin(), newXAxis.GetXmax(),
+                     h->GetXaxis()->GetNbins(), h->GetXaxis()->GetXmin(),
+                     h->GetXaxis()->GetXmax());
+               return -1;
+             }
+           }
+
+           // check first if histograms have same bins in Y
+           if (!SameLimitsAndNBins(newYAxis, *(h->GetYaxis()))) {
+             sameLimitsY = kFALSE;
+             // recompute in this case the optimal limits
+             // The condition to works is that the histogram have same bin with
+             // and one common bin edge
+             if (!RecomputeAxisLimits(newYAxis, *(h->GetYaxis()))) {
+               Error("Merge", "Cannot merge histograms - limits are inconsistent:\n "
+                     "first: (%d, %f, %f), second: (%d, %f, %f)",
+                     newYAxis.GetNbins(), newYAxis.GetXmin(), newYAxis.GetXmax(),
+                     h->GetYaxis()->GetNbins(), h->GetYaxis()->GetXmin(),
+                     h->GetYaxis()->GetXmax());
+               return -1;
+             }
+           }
+           allSameLimits = sameLimitsY && sameLimitsX;
          }
       }
    }  while ( ( h = dynamic_cast<TH2*> ( next() ) ) != NULL );
@@ -1552,9 +1562,24 @@ Long64_t TH2::Merge(TCollection *list)
       inlist.AddFirst(hclone);
    }
 
-   if (!allSameLimits && initialLimitsFound)
-      SetBins(newXAxis.GetNbins(), newXAxis.GetXmin(), newXAxis.GetXmax(),
-      newYAxis.GetNbins(), newYAxis.GetXmin(), newYAxis.GetXmax());
+   if (!allSameLimits && initialLimitsFound) {
+     if (!sameLimitsX) {
+       fXaxis.SetRange(0,0);
+       if (newXAxis.GetXbins()->GetSize() != 0) fXaxis.Set(newXAxis.GetNbins(),newXAxis.GetXbins()->GetArray());
+       else                                     fXaxis.Set(newXAxis.GetNbins(),newXAxis.GetXmin(), newXAxis.GetXmax());
+     }
+     if (!sameLimitsY) {
+       fYaxis.SetRange(0,0);
+       if (newYAxis.GetXbins()->GetSize() != 0) fYaxis.Set(newYAxis.GetNbins(),newYAxis.GetXbins()->GetArray());
+       else                                     fYaxis.Set(newYAxis.GetNbins(),newYAxis.GetXmin(), newYAxis.GetXmax());
+     }
+     fZaxis.Set(1,0,1);
+     fNcells = (fXaxis.GetNbins()+2)*(fYaxis.GetNbins()+2);
+     SetBinsLength(fNcells);
+     if (fSumw2.fN) {
+       fSumw2.Set(fNcells);
+     }
+   }
 
    if (!allHaveLimits) {
       // fill this histogram with all the data from buffers of histograms without limits
@@ -1590,13 +1615,18 @@ Long64_t TH2::Merge(TCollection *list)
    ResetBit(kCanRebin); // reset, otherwise setting the under/overflow will rebin
 
    while ((h=(TH2*)next())) {
+
+      // skip empty histograms 
+      Double_t histEntries = h->GetEntries();
+      if (h->fTsumw == 0 && histEntries == 0) continue;
+
       // process only if the histogram has limits; otherwise it was processed before
       if (h->GetXaxis()->GetXmin() < h->GetXaxis()->GetXmax()) {
          // import statistics
          h->GetStats(stats);
          for (Int_t i = 0; i < kNstat; i++)
             totstats[i] += stats[i];
-         nentries += h->GetEntries();
+         nentries += histEntries;
 
          nx = h->GetXaxis()->GetNbins();
          ny = h->GetYaxis()->GetNbins();
@@ -1610,7 +1640,7 @@ Long64_t TH2::Merge(TCollection *list)
                bin = binx +(nx+2)*biny;
                cu = h->GetBinContent(bin);
                if (!allSameLimits) { 
-                  if (cu != 0 && ( h->IsBinUnderflow(bin) || h->IsBinOverflow(bin) )) {
+                  if (cu != 0 && ( (!sameLimitsX && (binx == 0 || binx == nx+1)) || (!sameLimitsY && (biny == 0 || biny == ny+1)) )) {
                      Error("Merge", "Cannot merge histograms - the histograms have"
                            " different limits and undeflows/overflows are present."
                            " The initial histogram is now broken!");
@@ -1723,7 +1753,7 @@ TH2 *TH2::Rebin2D(Int_t nxgroup, Int_t nygroup, const char *newname)
       oldErrors = new Double_t[(nxbins+2)*(nybins+2)];
       for (xbin = 0; xbin < nxbins+2; xbin++) {
          for (ybin = 0; ybin < nybins+2; ybin++) {
-	    //conventions are the same as in TH1::GetBin(xbin,ybin)
+            //conventions are the same as in TH1::GetBin(xbin,ybin)
             oldErrors[ybin*(nxbins+2)+xbin] = GetBinError(xbin, ybin);
          }
       }
@@ -1809,8 +1839,8 @@ TH2 *TH2::Rebin2D(Int_t nxgroup, Int_t nygroup, const char *newname)
                if (oldxbin+i > nxbins) break;
                for (j =0; j < nygroup; j++) {
                   if (oldybin+j > nybins) break;
-		  //get global bin (same conventions as in TH1::GetBin(xbin,ybin)
-		  bin = oldxbin + i + (oldybin + j)*(nxbins + 2);
+                  //get global bin (same conventions as in TH1::GetBin(xbin,ybin)
+                  bin = oldxbin + i + (oldybin + j)*(nxbins + 2);
                   binContent += oldBins[bin];
                   if (oldErrors) binError += oldErrors[bin]*oldErrors[bin];
                }
@@ -1825,18 +1855,18 @@ TH2 *TH2::Rebin2D(Int_t nxgroup, Int_t nygroup, const char *newname)
       // Recompute correct underflows and overflows.
 
       //copy old underflow bin in x and y (0,0)
-      hnew->SetBinContent(0,0,oldBins[0]);      
-      if (oldErrors) hnew->SetBinError(0,0,oldErrors[0]);         
-      
+      hnew->SetBinContent(0,0,oldBins[0]);
+      if (oldErrors) hnew->SetBinError(0,0,oldErrors[0]);
+
       //calculate new overflow bin in x and y (newxbins+1,newybins+1)
       binContent = 0;
       binError = 0;
       for(xbin = oldxbin; xbin <= nxbins+1; xbin++)
-	 for(ybin = oldybin; ybin <= nybins+1; ybin++){
-	    bin = xbin + (nxbins+2)*ybin;
-	    binContent += oldBins[bin];
-	    if(oldErrors) binError += oldErrors[bin]*oldErrors[bin];
-	 }
+         for(ybin = oldybin; ybin <= nybins+1; ybin++){
+            bin = xbin + (nxbins+2)*ybin;
+            binContent += oldBins[bin];
+            if(oldErrors) binError += oldErrors[bin]*oldErrors[bin];
+         }
       hnew->SetBinContent(newxbins+1,newybins+1,binContent);
       if(oldErrors) hnew->SetBinError(newxbins+1,newybins+1,TMath::Sqrt(binError));
       
@@ -1844,20 +1874,20 @@ TH2 *TH2::Rebin2D(Int_t nxgroup, Int_t nygroup, const char *newname)
       binContent = 0;
       binError = 0;
       for(ybin = oldybin; ybin <= nybins+1; ybin++){
-	 bin = ybin*(nxbins+2);
-	 binContent += oldBins[bin];
-	 if(oldErrors) binError += oldErrors[bin] * oldErrors[bin];
+         bin = ybin*(nxbins+2);
+         binContent += oldBins[bin];
+         if(oldErrors) binError += oldErrors[bin] * oldErrors[bin];
       }
       hnew->SetBinContent(0,newybins+1,binContent);
       if(oldErrors) hnew->SetBinError(0,newybins+1,TMath::Sqrt(binError));
-      
+
       //calculate new overflow bin in x and underflow in y (newxbins+1,0)
       binContent = 0;
       binError = 0;
       for(xbin = oldxbin; xbin <= nxbins+1; xbin++){
-	 bin = xbin;
-	 binContent += oldBins[bin];
-	 if(oldErrors) binError += oldErrors[bin] * oldErrors[bin];
+         bin = xbin;
+         binContent += oldBins[bin];
+         if(oldErrors) binError += oldErrors[bin] * oldErrors[bin];
       }
       hnew->SetBinContent(newxbins+1,0,binContent);
       if(oldErrors) hnew->SetBinError(newxbins+1,0,TMath::Sqrt(binError));
@@ -1873,15 +1903,15 @@ TH2 *TH2::Rebin2D(Int_t nxgroup, Int_t nygroup, const char *newname)
          binError0 = binError2 = 0;
          for (i=0; i<nxgroup; i++) {
             if (oldxbin2+i > nxbins) break;
-	    //old underflow bin (in y)
-	    ufbin = oldxbin2 + i;
-	    binContent0 += oldBins[ufbin];
-	    if(oldErrors) binError0 += oldErrors[ufbin] * oldErrors[ufbin];
-	    for(ybin = oldybin; ybin <= nybins + 1; ybin++){
-	       //old overflow bin (in y)
-	       ofbin = ufbin + ybin*(nxbins+2);
-	       binContent2 += oldBins[ofbin];
-	       if(oldErrors) binError2 += oldErrors[ofbin] * oldErrors[ofbin];
+            //old underflow bin (in y)
+            ufbin = oldxbin2 + i;
+            binContent0 += oldBins[ufbin];
+            if(oldErrors) binError0 += oldErrors[ufbin] * oldErrors[ufbin];
+            for(ybin = oldybin; ybin <= nybins + 1; ybin++){
+               //old overflow bin (in y)
+               ofbin = ufbin + ybin*(nxbins+2);
+               binContent2 += oldBins[ofbin];
+               if(oldErrors) binError2 += oldErrors[ofbin] * oldErrors[ofbin];
             }
          }
          hnew->SetBinContent(xbin,0,binContent0);
@@ -1900,14 +1930,14 @@ TH2 *TH2::Rebin2D(Int_t nxgroup, Int_t nygroup, const char *newname)
          binError0 = binError2 = 0;
          for (i=0; i<nygroup; i++) {
             if (oldybin2+i > nybins) break;
-	    //old underflow bin (in x)
-	    ufbin = (oldybin2 + i)*(nxbins+2);
+            //old underflow bin (in x)
+            ufbin = (oldybin2 + i)*(nxbins+2);
             binContent0 += oldBins[ufbin];
-	    if(oldErrors) binError0 += oldErrors[ufbin] * oldErrors[ufbin];
-	    for(xbin = oldxbin; xbin <= nxbins+1; xbin++){
-	       ofbin = ufbin + xbin;
-	       binContent2 += oldBins[ofbin];
-	       if(oldErrors) binError2 += oldErrors[ofbin] * oldErrors[ofbin];
+            if(oldErrors) binError0 += oldErrors[ufbin] * oldErrors[ufbin];
+            for(xbin = oldxbin; xbin <= nxbins+1; xbin++){
+               ofbin = ufbin + xbin;
+               binContent2 += oldBins[ofbin];
+               if(oldErrors) binError2 += oldErrors[ofbin] * oldErrors[ofbin];
             }
          }
          hnew->SetBinContent(0,ybin,binContent0);
@@ -2144,7 +2174,7 @@ TProfile *TH2::ProfileX(const char *name, Int_t firstybin, Int_t lastybin, Optio
    //
    //   if option "d" is specified, the profile is drawn in the current pad.
    //
-   //   if option "o" original axis range of the taget axes will be
+   //   if option "o" original axis range of the target axes will be
    //   kept, but only bins inside the selected range will be filled.
    //
    //   The option can also be used to specify the projected profile error type.

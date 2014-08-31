@@ -39,6 +39,7 @@
 #include "TTree.h"
 #include "TVirtualCollectionProxy.h"
 #include "TVirtualCollectionIterators.h"
+#include "TVirtualMutex.h"
 #include "TVirtualPad.h"
 #include "TBranchSTL.h"
 #include "TVirtualArray.h"
@@ -168,12 +169,13 @@ TBranchElement::TBranchElement()
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Default and I/O constructor.
    fNleaves = 0;
    fReadLeaves = (ReadLeaves_t)&TBranchElement::ReadLeavesImpl;
-   fFillLeaves = (FillLeaves_t)&TBranchElement::FillLeavesImpl;   
+   fFillLeaves = (FillLeaves_t)&TBranchElement::FillLeavesImpl;
 }
 
 //______________________________________________________________________________
@@ -208,6 +210,7 @@ TBranchElement::TBranchElement(TTree *tree, const char* bname, TStreamerInfo* si
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Constructor when the branch object is not a TClonesArray nor an STL container.
@@ -249,6 +252,7 @@ TBranchElement::TBranchElement(TBranch *parent, const char* bname, TStreamerInfo
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Constructor when the branch object is not a TClonesArray nor an STL container.
@@ -308,8 +312,7 @@ void TBranchElement::Init(TTree *tree, TBranch *parent,const char* bname, TStrea
 
    if (id > -1) {
       // We are *not* a top-level branch.
-      ULong_t* elems = sinfo->GetElems();
-      TStreamerElement* element = (TStreamerElement*) elems[id];
+      TStreamerElement* element = sinfo->GetElement(id);
       fStreamerType = element->GetType();
    }
 
@@ -373,8 +376,7 @@ void TBranchElement::Init(TTree *tree, TBranch *parent,const char* bname, TStrea
       }
    } else {
       // -- We are a sub-branch of a split object.
-      ULong_t* elems = sinfo->GetElems();
-      TStreamerElement* element = (TStreamerElement*) elems[id];
+      TStreamerElement* element = sinfo->GetElement(id);
       if ((fStreamerType == TVirtualStreamerInfo::kObject) || (fStreamerType == TVirtualStreamerInfo::kBase) || (fStreamerType == TVirtualStreamerInfo::kTNamed) || (fStreamerType == TVirtualStreamerInfo::kTObject) || (fStreamerType == TVirtualStreamerInfo::kObjectp) || (fStreamerType == TVirtualStreamerInfo::kObjectP)) {
          // -- If we are an object data member which inherits from TObject,
          // flag it so that later during i/o we will register the object
@@ -497,7 +499,7 @@ void TBranchElement::Init(TTree *tree, TBranch *parent,const char* bname, TStrea
             SetReadLeavesPtr();
             SetFillLeavesPtr();
             return;
-         } else if (element->GetClassPointer() == TClonesArray::Class()) {  
+         } else if (element->GetClassPointer() == TClonesArray::Class()) {
             // -- We are a TClonesArray element.
             Bool_t ispointer = element->IsaPointer();
             TClonesArray *clones;
@@ -658,6 +660,7 @@ TBranchElement::TBranchElement(TTree *tree, const char* bname, TClonesArray* clo
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Constructor when the branch object is a TClonesArray.
@@ -681,6 +684,7 @@ TBranchElement::TBranchElement(TBranch *parent, const char* bname, TClonesArray*
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Constructor when the branch object is a TClonesArray.
@@ -799,6 +803,7 @@ TBranchElement::TBranchElement(TTree *tree, const char* bname, TVirtualCollectio
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Constructor when the branch object is an STL collection.
@@ -821,6 +826,7 @@ TBranchElement::TBranchElement(TBranch *parent, const char* bname, TVirtualColle
 , fReadActionSequence(0)
 , fFillActionSequence(0)
 , fIterators(0)
+, fWriteIterators(0)
 , fPtrIterators(0)
 {
    // -- Constructor when the branch object is an STL collection.
@@ -967,6 +973,7 @@ TBranchElement::~TBranchElement()
    delete fReadActionSequence;
    delete fFillActionSequence;
    delete fIterators;
+   delete fWriteIterators;
    delete fPtrIterators;
 }
 
@@ -978,7 +985,7 @@ inline TStreamerInfo* TBranchElement::GetInfoImp() const
 {
    // -- Get streamer info for the branch class.
 
-   // Note: we need to find a way to reduce the complexity of 
+   // Note: we need to find a way to reduce the complexity of
    // this often executed condition.
    if (!fInfo || (fInfo && (!fInit || !fInfo->IsCompiled()))) {
       const_cast<TBranchElement*>(this)->InitInfo();
@@ -1018,12 +1025,11 @@ void TBranchElement::Browse(TBrowser* b)
 
                // check if we're in a sub-branch of this class
                // we can only find out asking the streamer given our ID
-               ULong_t *elems=0;
                TStreamerElement *element=0;
                TClass* clsub=0;
                if (fID>=0 && GetInfoImp()
-                   && ((elems=GetInfoImp()->GetElems()))
-                   && ((element=(TStreamerElement *)elems[fID]))
+                   && GetInfoImp()->IsCompiled()
+                   && ((element=GetInfoImp()->GetElement(fID)))
                    && ((clsub=element->GetClassPointer())))
                   cl=clsub;
             }
@@ -1141,7 +1147,7 @@ void TBranchElement::BuildTitle(const char* name)
       if (dim>=0) {
          branchname.Remove(dim);
       }
-      branchname += Form("[%s_]",name);
+      branchname += TString::Format("[%s_]",name);
       bre->SetTitle(branchname);
       if (lf) {
          lf->SetTitle(branchname);
@@ -1348,8 +1354,8 @@ void TBranchElement::FillLeavesMakeClass(TBuffer& b)
          case TVirtualStreamerInfo::kDouble   /*  8 */: { b.WriteFastArray((Double_t*)  fAddress, n); break; }
          case TVirtualStreamerInfo::kDouble32 /*  9 */: {
             TVirtualStreamerInfo* si = GetInfoImp();
-            // coverity[returned_null] structurally si->GetElems() can not be null. 
-            TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+            // coverity[returned_null] structurally si->fComp (used in GetElem) can not be null.
+            TStreamerElement* se = si->GetElement(fID);
             Double_t* xx = (Double_t*) fAddress;
             for (Int_t ii = 0; ii < n; ++ii) {
                b.WriteDouble32(&(xx[ii]),se);
@@ -1358,8 +1364,8 @@ void TBranchElement::FillLeavesMakeClass(TBuffer& b)
          }
          case TVirtualStreamerInfo::kFloat16 /*  19 */: {
             TVirtualStreamerInfo* si = GetInfoImp();
-            // coverity[dereference] structurally si can not be null. 
-            TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+            // coverity[dereference] structurally si can not be null.
+            TStreamerElement* se = (TStreamerElement*) si->GetElement(fID);
             Float_t* xx = (Float_t*) fAddress;
             for (Int_t ii = 0; ii < n; ++ii) {
                b.WriteFloat16(&(xx[ii]),se);
@@ -1415,7 +1421,7 @@ void TBranchElement::FillLeavesCollection(TBuffer& b)
       //NOTE: and those not work in general yet, since the TStaging object is neither created nor passed.
       //  We need to review how to avoid the need for a TStaging during the writing.
       if (proxy->GetProperties() & TVirtualCollectionProxy::kIsAssociative) {
-         // do nothing for now ...
+         fWriteIterators->CreateIterators(fObject, proxy);
       } else {
          fIterators->CreateIterators(fObject, proxy);
       }
@@ -1516,6 +1522,37 @@ void TBranchElement::FillLeavesCollectionMember(TBuffer& b)
 }
 
 //______________________________________________________________________________
+void TBranchElement::FillLeavesAssociativeCollectionMember(TBuffer& b)
+{
+   // -- Write leaves into i/o buffers for this branch.
+   // Case of a data member within a collection (fType == 41).
+
+   ValidateAddress();
+
+   //
+   // Silently do nothing if we have no user i/o buffer.
+   //
+
+   if (!fObject) {
+      return;
+   }
+
+   // FIXME: This wont work if a pointer to vector is split!
+   TVirtualCollectionProxy::TPushPop helper(GetCollectionProxy(), fObject);
+   // Note: We cannot pop the proxy here because we need it for the i/o.
+   TStreamerInfo* si = (TStreamerInfo*)GetInfoImp();
+   if (!si) {
+      Error("FillLeaves", "Cannot get streamer info for branch '%s'", GetName());
+      return;
+   }
+
+   TVirtualCollectionIterators *iter = fBranchCount->fWriteIterators;
+   R__ASSERT(0!=iter);
+   b.ApplySequence(*fFillActionSequence,iter->fBegin,iter->fEnd);
+
+}
+
+//______________________________________________________________________________
 void TBranchElement::FillLeavesClones(TBuffer& b)
 {
    // -- Write leaves into i/o buffers for this branch.
@@ -1596,7 +1633,7 @@ void TBranchElement::FillLeavesCustomStreamer(TBuffer& b)
    }
 
 
-   fBranchClass->Streamer(fObject,b);  
+   fBranchClass->Streamer(fObject,b);
 }
 
 //______________________________________________________________________________
@@ -1646,7 +1683,11 @@ void TBranchElement::FillLeavesMemberCounter(TBuffer& b)
       Error("FillLeaves", "Cannot get streamer info for branch '%s'", GetName());
       return;
    }
-   Int_t n = si->WriteBufferAux(b, &fObject, fID, 1, 0, 0);
+   // Since info is not null, fFillActionSequence is not null either.
+   b.ApplySequence(*fFillActionSequence, fObject);
+   // Int_t n = si->WriteBufferAux(b, &fObject, fID, 1, 0, 0);
+
+   Int_t n = *(Int_t*)(fObject + si->TStreamerInfo::GetElementOffset(fID)); // or  GetInfoImp()->GetTypedValue<Int_t>(&fObject, fID, j, -1);
    if (n > fMaximum) {
       fMaximum = n;
    }
@@ -1722,7 +1763,7 @@ TBranch* TBranchElement::FindBranch(const char *name)
 
    if (fID >= 0) {
       TVirtualStreamerInfo* si = GetInfoImp();
-      TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+      TStreamerElement* se = si->GetElement(fID);
       if (se && se->IsBase()) {
          // We allow the user to pass only the last dotted component of the name.
          UInt_t len = strlen(name);
@@ -1784,7 +1825,7 @@ TBranch* TBranchElement::FindBranch(const char *name)
          TBranchElement *br = (TBranchElement*)obj;
          TVirtualStreamerInfo* si = br->GetInfoImp();
          if (si && br->GetID() >= 0) {
-            TStreamerElement* se = (TStreamerElement*) si->GetElems()[br->GetID()];
+            TStreamerElement* se = si->GetElement(br->GetID());
             if (se && se->IsBase()) {
                result = br->FindBranch(name);
             }
@@ -1810,7 +1851,7 @@ TLeaf* TBranchElement::FindLeaf(const char *name)
       if (parent==this || parent->GetID()<0 ) return 0;
 
       TVirtualStreamerInfo* si = parent->GetInfoImp();
-      TStreamerElement* se = (TStreamerElement*) si->GetElems()[parent->GetID()];
+      TStreamerElement* se = si->GetElement(parent->GetID());
 
       if (! se->IsBase() ) return 0;
 
@@ -1870,7 +1911,14 @@ void TBranchElement::InitInfo()
       TClass* targetClass = 0;
       if( fTargetClass.GetClassName()[0] ) {
          targetClass = fTargetClass;
-         if( !targetClass ) {
+         if (!targetClass && GetCollectionProxy()) {
+            // We are in the case where the branch holds a custom collection
+            // proxy but the dictionary is not loaded, calling
+            // GetCollectionProxy had the side effect of creating the TClass
+            // corresponding to this emulated collection.
+            targetClass = fTargetClass;
+         }
+         if ( !targetClass ) {
             Error( "InitInfo", "The target class dictionary is not present!" );
             return;
          }
@@ -1884,7 +1932,7 @@ void TBranchElement::InitInfo()
          {
             if ( (cl->Property() & kIsAbstract) && cl == targetClass) {
                TBranchElement *parent = (TBranchElement*)GetMother()->GetSubBranch(this);
-               if (parent && parent != this && !parent->GetClass()->IsLoaded() ) { 
+               if (parent && parent != this && !parent->GetClass()->IsLoaded() ) {
                   // Our parent's class is emulated and we represent an abstract class.
                   // and the target class has not been set explicilty.
                   TString target = cl->GetName();
@@ -1907,6 +1955,7 @@ void TBranchElement::InitInfo()
          // FIXME: Check that the found streamer info checksum matches our branch class checksum here.
          // Check to see if the class code was unloaded/reloaded
          // since we were created.
+         R__LOCKGUARD(gCINTMutex);
          if (fCheckSum && (cl->IsForeign() || (!cl->IsLoaded() && (fClassVersion == 1) && cl->GetStreamerInfos()->At(1) && (fCheckSum != ((TVirtualStreamerInfo*) cl->GetStreamerInfos()->At(1))->GetCheckSum())))) {
             // Try to compensate for a class that got unloaded on us.
             // Search through the streamer infos by checksum
@@ -1940,12 +1989,10 @@ void TBranchElement::InitInfo()
 
    if (fInfo) {
 
-      if ( GetID()>-1 && (!fInfo->IsCompiled() || fInfo->IsOptimized()) ) {
+      if ( GetID()>-1 && !fInfo->IsCompiled() ) {
          // Streamer info has not yet been compiled.
-         //
-         // Optimizing does not work with splitting.
-         fInfo->SetBit(TVirtualStreamerInfo::kCannotOptimize);
-         fInfo->Compile();
+
+         Error("InitInfo","StreamerInfo is not compiled.");
       }
       if (!fInit) {
          // We were read in from a file, figure out what our fID should be,
@@ -1966,14 +2013,13 @@ void TBranchElement::InitInfo()
             int offset = 0;
             TStreamerElement* elt = fInfo->GetStreamerElement(s.c_str(), offset);
             if (elt && offset!=TStreamerInfo::kMissing) {
-               size_t ndata = fInfo->GetNdata();
-               ULong_t* elems = fInfo->GetElems();
+               size_t ndata = fInfo->GetNelement();
                fIDs.clear();
                for (size_t i = 0; i < ndata; ++i) {
-                  if (((TStreamerElement*) elems[i]) == elt) {
+                  if (fInfo->GetElement(i) == elt) {
                      if (elt->TestBit (TStreamerElement::kCache)
                          && (i+1) < ndata
-                         && s == ((TStreamerElement*) elems[i])->GetName())
+                         && s == fInfo->GetElement(i)->GetName())
                      {
                         // If the TStreamerElement we found is storing the information in the
                         // cache and is a repeater, we need to use the real one (the next one).
@@ -1983,7 +2029,7 @@ void TBranchElement::InitInfo()
                         fID = i;
                         if (elt->TestBit(TStreamerElement::kRepeat)) {
                            fIDs.push_back(fID+1);
-                        } else if (((TStreamerElement*) elems[i+1])->TestBit(TStreamerElement::kWrite)) {
+                        } else if (fInfo->GetElement(i+1)->TestBit(TStreamerElement::kWrite)) {
                            fIDs.push_back(fID+1);
                         }
                      } else {
@@ -1996,7 +2042,7 @@ void TBranchElement::InitInfo()
                   }
                }
                for (size_t i = fID+1+(fIDs.size()); i < ndata; ++i) {
-                  TStreamerElement *nextel = ((TStreamerElement*) elems[i]);
+                  TStreamerElement *nextel = fInfo->GetElement(i);
                   // Add all (and only) the Artificial Elements that follows this StreamerInfo.
                   if (fType==31||fType==41) {
                      // The nested objects are unfolded and their branch can not be used to
@@ -2020,10 +2066,9 @@ void TBranchElement::InitInfo()
             } else if (elt && offset==TStreamerInfo::kMissing) {
                // Still re-assign fID properly.
                fIDs.clear();
-               size_t ndata = fInfo->GetNdata();
-               ULong_t* elems = fInfo->GetElems();
+               size_t ndata = fInfo->GetNelement();
                for (size_t i = 0; i < ndata; ++i) {
-                  if (((TStreamerElement*) elems[i]) == elt) {
+                  if (fInfo->GetElement(i) == elt) {
                      fID = i;
                      break;
                   }
@@ -2034,8 +2079,8 @@ void TBranchElement::InitInfo()
                // fID = -3;
                // SetBit(kDoNotProcess);
             }
-            if (fOnfileObject==0 && (fType==31 || fType==41 || (0 <= fType && fType <=2) ) && fInfo->GetNdata()
-                && ((TStreamerElement*) fInfo->GetElems()[0])->GetType() == TStreamerInfo::kCacheNew)
+            if (fOnfileObject==0 && (fType==31 || fType==41 || (0 <= fType && fType <=2) ) && fInfo->GetNelement()
+                && fInfo->GetElement(0)->GetType() == TStreamerInfo::kCacheNew)
             {
                Int_t arrlen = 1;
                if (fType==31 || fType==41) {
@@ -2044,7 +2089,7 @@ void TBranchElement::InitInfo()
                      arrlen = leaf->GetMaximum();
                   }
                }
-               fOnfileObject = new TVirtualArray( ((TStreamerElement*) fInfo->GetElems()[0])->GetClassPointer(), arrlen );
+               fOnfileObject = new TVirtualArray( fInfo->GetElement(0)->GetClassPointer(), arrlen );
                // Propage this to all the other branch of this type.
                TObjArray *branches = GetMother()->GetSubBranch(this)->GetListOfBranches();
                Int_t nbranches = branches->GetEntriesFast();
@@ -2094,7 +2139,7 @@ TVirtualCollectionProxy* TBranchElement::GetCollectionProxy()
       } else {
          // We are not a top-level branch.
          TVirtualStreamerInfo* si = thiscast->GetInfoImp();
-         TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+         TStreamerElement* se = si->GetElement(fID);
          className = se->GetTypeName();
       }
       TClass* cl = TClass::GetClass(className);
@@ -2120,7 +2165,7 @@ TVirtualCollectionProxy* TBranchElement::GetCollectionProxy()
          equiv.Form("vector<%s>",fClonesName.Data());
          TClass *clequiv = TClass::GetClass(equiv);
          proxy = clequiv->GetCollectionProxy();
-         if (!proxy) { 
+         if (!proxy) {
             Fatal("GetCollectionProxy",
                   "Can not create a Collection Proxy of any kind for the class \"%s\" needed by the branch \"%s\" of the TTree \"%s\"!",
                   className, GetName(), GetTree()->GetName());
@@ -2168,10 +2213,10 @@ TClass* TBranchElement::GetCurrentClass()
       }
       return cl;
    }
-   if (GetID() < 0 || GetID()>=brInfo->GetNdata()) {
+   if (GetID() < 0 || GetID()>=brInfo->GetNelement()) {
       return 0;
    }
-   TStreamerElement* currentStreamerElement = ((TStreamerElement*) brInfo->GetElems()[GetID()]);
+   TStreamerElement* currentStreamerElement = brInfo->GetElement(GetID());
    TDataMember* dm = (TDataMember*) motherCl->GetListOfDataMembers()->FindObject(currentStreamerElement->GetName());
 
    TString newType;
@@ -2312,7 +2357,7 @@ Int_t TBranchElement::GetExpectedType(TClass *&expectedClass,EDataType &expected
       // Case of an object data member.  Here we allow for the
       // variable name to be ommitted.  Eg, for Event.root with split
       // level 1 or above  Draw("GetXaxis") is the same as Draw("fH.GetXaxis()")
-      TStreamerElement* element = (TStreamerElement*) GetInfoImp()->GetElems()[fID];
+      TStreamerElement* element = GetInfoImp()->GetElement(fID);
       if (element) {
          expectedClass = element->GetClassPointer();
          if (!expectedClass) {
@@ -2392,8 +2437,7 @@ const char* TBranchElement::GetTypeName() const
    if ((fStreamerType < 1) || (fStreamerType > 59)) {
       if (fBranchClass.GetClass()) {
          if (fID>=0) {
-            ULong_t* elems = GetInfoImp()->GetElems();
-            return ((TStreamerElement*) elems[fID])->GetTypeName();
+            return GetInfoImp()->GetElement(fID)->GetTypeName();
          } else {
             return fBranchClass.GetClass()->GetName();
          }
@@ -2559,23 +2603,23 @@ void* TBranchElement::GetValuePointer() const
          return 0;
       }
       if (fType == 3) {    //top level branch of a TClonesArray
-         //return &fNdata;
+                           //return &fNdata;
          return 0;
       } else if (fType == 4) {    //top level branch of a TClonesArray
-         //return &fNdata;
+                                  //return &fNdata;
          return 0;
       } else if (fType == 31) {    // sub branch of a TClonesArray
-         //Int_t atype = fStreamerType;
-         //if (atype < 20) atype += 20;
-         //return GetInfoImp()->GetValue(fAddress, atype, j, 1);
+                                   //Int_t atype = fStreamerType;
+                                   //if (atype < 20) atype += 20;
+                                   //return GetInfoImp()->GetValue(fAddress, atype, j, 1);
          return 0;
       } else if (fType == 41) {    // sub branch of a TClonesArray
-         //Int_t atype = fStreamerType;
-         //if (atype < 20) atype += 20;
-         //return GetInfoImp()->GetValue(fAddress, atype, j, 1);
+                                   //Int_t atype = fStreamerType;
+                                   //if (atype < 20) atype += 20;
+                                   //return GetInfoImp()->GetValue(fAddress, atype, j, 1);
          return 0;
       } else if (fType <= 2) {     // branch in split mode
-         // FIXME: This should probably be < 60 instead!
+                                   // FIXME: This should probably be < 60 instead!
          if (fStreamerType > 40 && fStreamerType < 55) {
             //Int_t atype = fStreamerType - 20;
             //return GetInfoImp()->GetValue(fAddress, atype, j, 1);
@@ -2596,7 +2640,7 @@ void* TBranchElement::GetValuePointer() const
    } else {
       //return GetInfoImp()->GetValue(object,fID,j,-1);
       if (!GetInfoImp() || !object) return 0;
-      char **val = (char**)(object+GetInfoImp()->GetOffsets()[prID]);
+      char **val = (char**)(object+GetInfoImp()->TStreamerInfo::GetElementOffset(prID));
       return *val;
    }
 }
@@ -2668,14 +2712,13 @@ void TBranchElement::InitializeOffsets()
          // we are actually a different type.
          TVirtualStreamerInfo* si = GetInfoImp();
          // Note: We tested to make sure the streamer info was available previously.
-         ULong_t* elems = si->GetElems();
-         if (!elems) {
+         if (!si->IsCompiled()) {
             Warning("InitializeOffsets", "Streamer info for branch: %s has no elements array!", GetName());
             fInitOffsets = kTRUE;
             return;
          }
          // FIXME: Check that fID is in range.
-         branchElem = (TStreamerElement*) elems[fID];
+         branchElem = si->GetElement(fID);
          if (!branchElem) {
             Warning("InitializeOffsets", "Cannot get streamer element for branch: %s!", GetName());
             fInitOffsets = kTRUE;
@@ -2683,8 +2726,8 @@ void TBranchElement::InitializeOffsets()
          } else if (branchElem->TestBit(TStreamerElement::kRepeat)) {
             // If we have a repeating streamerElement, use the next
             // one as it actually hold the 'real' data member('s offset)
-            if (elems[fID+1]) {
-               branchElem = (TStreamerElement*) elems[fID+1];
+            if (si->GetElement(fID+1)) {
+               branchElem = si->GetElement(fID+1);
             }
          }
          localOffset = branchElem->GetOffset();
@@ -2743,14 +2786,13 @@ void TBranchElement::InitializeOffsets()
             fInitOffsets = kTRUE;
             return;
          }
-         ULong_t* subBranchElems = sinfo->GetElems();
-         if (!subBranchElems) {
+         if (!sinfo->IsCompiled()) {
             Warning("InitializeOffsets", "No elements array for branch: %s subbranch: %s", GetName(), subBranch->GetName());
             fInitOffsets = kTRUE;
             return;
          }
          // FIXME: Make sure subBranch->fID is in range.
-         TStreamerElement* subBranchElement = (TStreamerElement*) subBranchElems[subBranch->fID];
+         TStreamerElement* subBranchElement = sinfo->GetElement(subBranch->fID);
          if (!subBranchElement) {
             Warning("InitializeOffsets", "No streamer element for branch: %s subbranch: %s", GetName(), subBranch->GetName());
             fInitOffsets = kTRUE;
@@ -2758,12 +2800,12 @@ void TBranchElement::InitializeOffsets()
          } else if (subBranchElement->TestBit(TStreamerElement::kRepeat)) {
             // If we have a repeating streamerElement, use the next
             // one as it actually hold the 'real' data member('s offset)
-            if (subBranchElems[subBranch->fID+1]) {
-               subBranchElement = (TStreamerElement*) subBranchElems[subBranch->fID+1];
+            if (sinfo->GetElement(subBranch->fID+1)) {
+               subBranchElement = sinfo->GetElement(subBranch->fID+1);
             }
          } else if (subBranchElement->TestBit(TStreamerElement::kCache)) {
             // We have a cached item which is not a repeated but we might still
-            // have some Actions triggered by a rule that affect real 
+            // have some Actions triggered by a rule that affect real
             // data member(s).
             if (subBranch->fReadActionSequence && subBranch->fReadActionSequence->fActions.size() > 1) {
                typedef TStreamerInfoActions::ActionContainer_t::iterator iterator;
@@ -3025,10 +3067,10 @@ void TBranchElement::InitializeOffsets()
                   // FIXME: Is using branchElem here the right thing?
                   pClass = branchElem->GetClassPointer();
                   if (pClass->Property() & kIsAbstract) {
-                     // the class is abstract, let see if the 
+                     // the class is abstract, let see if the
 
                      TBranchElement *parent = (TBranchElement*)GetMother()->GetSubBranch(this);
-                     if (parent && parent != this && !parent->GetClass()->IsLoaded() ) { 
+                     if (parent && parent != this && !parent->GetClass()->IsLoaded() ) {
                         // Our parent's class is emulated and we represent an abstract class.
                         // and the target class has not been set explicilty.
                         TString target = pClass->GetName();
@@ -3083,14 +3125,14 @@ void TBranchElement::InitializeOffsets()
             if( dynamic_cast<TBranchSTL*>(fParent) && stlParentName.Length() )
             {
                if( !strncmp( stlParentName.Data(), dataName.Data(), stlParentName.Length()-1 )
-                   && dataName[ stlParentName.Length() ] == '.' )
+                  && dataName[ stlParentName.Length() ] == '.' )
                   dataName.Remove( 0, stlParentName.Length()+1 );
             }
 
             // Find our offset in our parent class using
             // a lookup by name in the dictionary meta info
             // for our parent class.
-           
+
             if (alternateElement) {
                Ssiz_t dotpos = dataName.Last('.');
                Ssiz_t endpos = dataName.Length();
@@ -3109,7 +3151,7 @@ void TBranchElement::InitializeOffsets()
                offset = 0;
             } else {
                // -- No dictionary meta info for this data member, it must no
-               // longer exist 
+               // longer exist
                if (fEntries == 0) {
                   // ... unless we creating the branch in which case
                   // we have an internal error.
@@ -3118,6 +3160,12 @@ void TBranchElement::InitializeOffsets()
                      // just issue an error.
                      Error("InitializeOffsets",
                            "Could not find the real data member '%s' when constructing the branch '%s' [Likely missing ShowMember].",
+                           dataName.Data(),GetName());
+                  } else if (subInfo && subInfo->GetClassVersion()!=subInfo->GetClass()->GetClassVersion()) {
+                     // In the case where we are cloning a TTree that was created with an older version of the layout, we may not
+                     // able to find all the members
+                     Info("InitializeOffsets",
+                           "TTree created with an older schema, some data might not be copied in 'slow-cloning' mode; fast-cloning should have the correct result. '%s' is missing when constructing the branch '%s'. ",
                            dataName.Data(),GetName());
                   } else {
                      // Something really bad happen.
@@ -3150,8 +3198,8 @@ void TBranchElement::InitializeOffsets()
             // Compensate for the i/o routines adding our local offset later.
             if (subBranch->fObject == 0 && localOffset == TStreamerInfo::kMissing) {
                subBranch->SetOffset(TStreamerInfo::kMissing);
-               // We stil need to set fBranchOffset in the case of a missing 
-               // element so that SetAddress is (as expected) not called 
+               // We stil need to set fBranchOffset in the case of a missing
+               // element so that SetAddress is (as expected) not called
                // recursively in this case.
                fBranchOffset[subBranchIdx] = TStreamerInfo::kMissing;
             } else {
@@ -3299,10 +3347,9 @@ void TBranchElement::Print(Option_t* option) const
    if (strncmp(option,"debugInfo",strlen("debugInfo"))==0)  {
       Printf("Branch %s uses:",GetName());
       if (fID>=0) {
-         ULong_t* elems = GetInfoImp()->GetElems();
-         ((TStreamerElement*) elems[fID])->ls();
+         GetInfoImp()->GetElement(fID)->ls();
          for(UInt_t i=0; i< fIDs.size(); ++i) {
-            ((TStreamerElement*) elems[fIDs[i]])->ls();
+            GetInfoImp()->GetElement(fIDs[i])->ls();
          }
          Printf("   with read actions:");
          if (fReadActionSequence) fReadActionSequence->Print(option);
@@ -3562,7 +3609,7 @@ void TBranchElement::ReadLeavesMakeClass(TBuffer& b)
          case 18:  {b.ReadFastArray((Bool_t*)  fAddress, n); break;}
          case  9:  {
             TVirtualStreamerInfo* si = GetInfoImp();
-            TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+            TStreamerElement* se = (TStreamerElement*) si->GetElement(fID);
             Double_t *xx = (Double_t*) fAddress;
             for (Int_t ii=0;ii<n;ii++) {
                b.ReadDouble32(&(xx[ii]),se);
@@ -3571,7 +3618,7 @@ void TBranchElement::ReadLeavesMakeClass(TBuffer& b)
          }
          case  19:  {
             TVirtualStreamerInfo* si = GetInfoImp();
-            TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+            TStreamerElement* se = (TStreamerElement*) si->GetElement(fID);
             Float_t *xx = (Float_t*) fAddress;
             for (Int_t ii=0;ii<n;ii++) {
                b.ReadFloat16(&(xx[ii]),se);
@@ -3581,7 +3628,7 @@ void TBranchElement::ReadLeavesMakeClass(TBuffer& b)
       }
       return;
    } else if (fType <= 2) {     // branch in split mode
-      // FIXME: This should probably be < 60 instead.
+                                // FIXME: This should probably be < 60 instead.
       if (fStreamerType > 40 && fStreamerType < 55) {
          Int_t atype = fStreamerType - 40;
          Int_t n;
@@ -3634,7 +3681,7 @@ void TBranchElement::ReadLeavesMakeClass(TBuffer& b)
             case 18:  {b.ReadFastArray((Bool_t*)   fAddress, n); break;}
             case  9:  {
                TVirtualStreamerInfo* si = GetInfoImp();
-               TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+               TStreamerElement* se = (TStreamerElement*) si->GetElement(fID);
                Double_t *xx = (Double_t*) fAddress;
                for (Int_t ii=0;ii<n;ii++) {
                   b.ReadDouble32(&(xx[ii]),se);
@@ -3643,7 +3690,7 @@ void TBranchElement::ReadLeavesMakeClass(TBuffer& b)
             }
             case  19:  {
                TVirtualStreamerInfo* si = GetInfoImp();
-               TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+               TStreamerElement* se = (TStreamerElement*) si->GetElement(fID);
                Float_t *xx = (Float_t*) fAddress;
                for (Int_t ii=0;ii<n;ii++) {
                   b.ReadFloat16(&(xx[ii]),se);
@@ -3706,7 +3753,7 @@ void TBranchElement::ReadLeavesCollection(TBuffer& b)
    }
    fNdata = n;
 
-   R__PushCache onfileObject(((TBufferFile&)b),fOnfileObject,n);   
+   R__PushCache onfileObject(((TBufferFile&)b),fOnfileObject,n);
 
    // Note: Proxy-helper needs to "embrace" the entire
    //       streaming of this STL container if the container
@@ -3907,7 +3954,7 @@ void TBranchElement::ReadLeavesClones(TBuffer& b)
    if (clones->IsZombie()) {
       return;
    }
-   // The salient part of Clear is now 'duplicated in ExpandCreateFast (i.e. the 
+   // The salient part of Clear is now 'duplicated in ExpandCreateFast (i.e. the
    // setting to zero of the unused slots), so we no longer need to call Clear explicitly
    //    clones->Clear();
    clones->ExpandCreateFast(fNdata);
@@ -4020,7 +4067,7 @@ void TBranchElement::ReadLeavesMemberBranchCount(TBuffer& b)
       return;
    }
    R__PushCache onfileObject(((TBufferFile&)b),fOnfileObject,1); // Here we have a single object that contains a variable size C-style array.
-   // Since info is not null, fReadActionSequence is not null either.
+                                                                 // Since info is not null, fReadActionSequence is not null either.
    b.ApplySequence(*fReadActionSequence, fObject);
 }
 
@@ -4118,7 +4165,7 @@ void TBranchElement::ReleaseObject()
             Bool_t needDelete = proxy->GetProperties()&TVirtualCollectionProxy::kNeedDelete;
             if (needDelete && fID >= 0) {
                TVirtualStreamerInfo* si = GetInfoImp();
-               TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+               TStreamerElement* se = (TStreamerElement*) si->GetElement(fID);
                needDelete = !se->TestBit(TStreamerElement::kDoNotDelete);
             }
             if (needDelete) {
@@ -4145,7 +4192,7 @@ void TBranchElement::ReleaseObject()
             if (proxy) {
                if (fID >= 0) {
                   TVirtualStreamerInfo* si = GetInfoImp();
-                  TStreamerElement* se = (TStreamerElement*) si->GetElems()[fID];
+                  TStreamerElement* se = si->GetElement(fID);
                   if (!se->TestBit(TStreamerElement::kDoNotDelete) && proxy->GetProperties()&TVirtualCollectionProxy::kNeedDelete) {
                      TVirtualCollectionProxy::TPushPop helper(proxy,fObject);
                      proxy->Clear("force");
@@ -4403,7 +4450,7 @@ void TBranchElement::SetAddress(void* addr)
    // Try to build the streamer info.
    //
 
-   TVirtualStreamerInfo *info = GetInfoImp();
+   TStreamerInfo *info = GetInfoImp();
 
    // FIXME: Warn about failure to get the streamer info here?
 
@@ -4440,7 +4487,7 @@ void TBranchElement::SetAddress(void* addr)
          } else {
             // Compensate for the fact that the i/o routines
             // will add the streamer offset to the address.
-            fObject = fAddress - info->GetOffsets()[fID];
+            fObject = fAddress - info->TStreamerInfo::GetElementOffset(fID);
          }
          return;
       }
@@ -4489,6 +4536,9 @@ void TBranchElement::SetAddress(void* addr)
 
             if(fSTLtype != TClassEdit::kVector && fCollProxy->HasPointers() && fSplitLevel > TTree::kSplitCollectionOfPointers ) {
                fPtrIterators = new TVirtualCollectionPtrIterators(fCollProxy);
+            } else if (fCollProxy->GetProperties() & TVirtualCollectionProxy::kIsAssociative) {
+               fWriteIterators = new TVirtualCollectionIterators(fCollProxy,kFALSE);
+               fIterators = new TVirtualCollectionIterators(fCollProxy);
             } else {
                fIterators = new TVirtualCollectionIterators(fCollProxy);
             }
@@ -4527,6 +4577,9 @@ void TBranchElement::SetAddress(void* addr)
             delete fPtrIterators;
             if(fSTLtype != TClassEdit::kVector && fCollProxy->HasPointers() && fSplitLevel > TTree::kSplitCollectionOfPointers ) {
                fPtrIterators = new TVirtualCollectionPtrIterators(fCollProxy);
+            } else if (fCollProxy->GetProperties() & TVirtualCollectionProxy::kIsAssociative) {
+               fWriteIterators = new TVirtualCollectionIterators(fCollProxy,kFALSE);
+               fIterators = new TVirtualCollectionIterators(fCollProxy);
             } else {
                fIterators = new TVirtualCollectionIterators(fCollProxy);
             }
@@ -4560,6 +4613,9 @@ void TBranchElement::SetAddress(void* addr)
                delete fPtrIterators;
                if(fSTLtype != TClassEdit::kVector && fCollProxy->HasPointers() && fSplitLevel > TTree::kSplitCollectionOfPointers ) {
                   fPtrIterators = new TVirtualCollectionPtrIterators(fCollProxy);
+               } else if (fCollProxy->GetProperties() & TVirtualCollectionProxy::kIsAssociative) {
+                  fWriteIterators = new TVirtualCollectionIterators(fCollProxy,kFALSE);
+                  fIterators = new TVirtualCollectionIterators(fCollProxy);
                } else {
                   fIterators = new TVirtualCollectionIterators(fCollProxy);
                }
@@ -4625,6 +4681,9 @@ void TBranchElement::SetAddress(void* addr)
          if (!fIterators && !fPtrIterators) {
             if(fSTLtype != TClassEdit::kVector && GetCollectionProxy()->HasPointers() && fSplitLevel > TTree::kSplitCollectionOfPointers ) {
                fPtrIterators = new TVirtualCollectionPtrIterators(GetCollectionProxy());
+            } else if (fCollProxy->GetProperties() & TVirtualCollectionProxy::kIsAssociative) {
+               fWriteIterators = new TVirtualCollectionIterators(fCollProxy,kFALSE);
+               fIterators = new TVirtualCollectionIterators(fCollProxy);
             } else {
                fIterators = new TVirtualCollectionIterators(GetCollectionProxy());
             }
@@ -5110,6 +5169,8 @@ void TBranchElement::SetFillLeavesPtr()
          } else {
             fFillLeaves = (FillLeaves_t)&TBranchElement::FillLeavesCollectionSplitPtrMember;
          }
+      } else if (GetCollectionProxy()->GetProperties() & TVirtualCollectionProxy::kIsAssociative) {
+         fFillLeaves = (FillLeaves_t)&TBranchElement::FillLeavesAssociativeCollectionMember;
       } else {
          fFillLeaves = (FillLeaves_t)&TBranchElement::FillLeavesCollectionMember;
       }
@@ -5414,18 +5475,7 @@ Int_t TBranchElement::Unroll(const char* name, TClass* clParent, TClass* cl, cha
       return 0;
    }
 
-   //
-   //  Rebuild the streamer info for cl unoptimized
-   //  so that each data member has its own streamer
-   //  element.  This allows each data member to have
-   //  its own branch and thus be stored and queried
-   //  independently in the tree.
-   //
    TStreamerInfo* sinfo = fTree->BuildStreamerInfo(cl);
-   if (sinfo && splitlevel > 0) {
-      sinfo->SetBit(TVirtualStreamerInfo::kCannotOptimize);
-      sinfo->Compile();
-   }
 
    //
    //  Do nothing if we couldn't build the streamer info for cl.
@@ -5435,10 +5485,9 @@ Int_t TBranchElement::Unroll(const char* name, TClass* clParent, TClass* cl, cha
       return 0;
    }
 
-   Int_t ndata = sinfo->GetNdata();
-   ULong_t* elems = sinfo->GetElems();
+   Int_t ndata = sinfo->GetNelement();
 
-   if ((ndata == 1) && cl->GetCollectionProxy() && !strcmp(((TStreamerElement*) elems[0])->GetName(), "This")) {
+   if ((ndata == 1) && cl->GetCollectionProxy() && !strcmp(sinfo->GetElement(0)->GetName(), "This")) {
       // -- Class cl is an STL collection, refuse to split it.
       // Question: Why?  We certainly could by switching to the value class.
       // Partial Answer: Only the branch element constructor can split STL containers.
@@ -5447,7 +5496,7 @@ Int_t TBranchElement::Unroll(const char* name, TClass* clParent, TClass* cl, cha
 
    for (Int_t elemID = 0; elemID < ndata; ++elemID) {
       // -- Loop over all the streamer elements and create sub-branches as needed.
-      TStreamerElement* elem = (TStreamerElement*) elems[elemID];
+      TStreamerElement* elem = sinfo->GetElement(elemID);
       if (elem->IsA() == TStreamerArtificial::Class()) {
          continue;
       }
@@ -5464,8 +5513,7 @@ Int_t TBranchElement::Unroll(const char* name, TClass* clParent, TClass* cl, cha
          // -- This is a base class of cl.
          TClass* clOfBase = TClass::GetClass(elem->GetName());
          if ((clOfBase->Property() & kIsAbstract) && cl->InheritsFrom(TCollection::Class())) {
-            // -- Do nothing if we are abstract.
-            // FIXME: We should not test for TCollection here.
+            // -- Do nothing if we are one of the abstract collection (we know they have no data).
             return -1;
          }
          if ((btype == 31) || (btype == 41)) {

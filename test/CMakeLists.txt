@@ -8,7 +8,18 @@ cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 project(test)
 find_package(ROOT REQUIRED)
 
-include(${ROOT_USE_FILE})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+#---Copy the CTestCustom.cmake file into the build directory---------------------------------
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
+
+
+if(CMAKE_SYSTEM_NAME MATCHES Darwin)
+  # To avoid to set ld_Library_path to locate the test libraries
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath,@loader_path/.")
+endif()
 
 include_directories(${ROOT_INCLUDE_DIRS})
 if(DEFINED ROOT_SOURCE_DIR)  # Testing using the binary tree
@@ -28,8 +39,8 @@ ROOT_EXECUTABLE(hworld hworld.cxx LIBRARIES Gpad)
 ROOT_GENERATE_DICTIONARY(EventDict ${CMAKE_CURRENT_SOURCE_DIR}/Event.h LINKDEF EventLinkDef.h)
 ROOT_LINKER_LIBRARY(Event Event.cxx EventDict.cxx LIBRARIES Hist MathCore)
 
-ROOT_EXECUTABLE(eventexe MainEvent.cxx LIBRARIES Event RIO Tree Hist Net)
-ROOT_ADD_TEST(test-event COMMAND eventexe)
+ROOT_EXECUTABLE(testevent MainEvent.cxx LIBRARIES Event RIO Tree Hist Net)
+ROOT_ADD_TEST(test-event COMMAND testevent)
 
 #---hsimple------------------------------------------------------------------------------------
 ROOT_EXECUTABLE(hsimple hsimple.cxx LIBRARIES RIO Tree Hist)
@@ -96,7 +107,7 @@ ROOT_ADD_TEST(test-stresslinear COMMAND stressLinear FAILREGEX "FAILED")
 
 #--stressGraphics------------------------------------------------------------------------------------
 ROOT_EXECUTABLE(stressGraphics stressGraphics.cxx LIBRARIES Graf Gpad Postscript)
-configure_file(stressGraphics.ref stressGraphics.ref @COPY_ONLY)
+configure_file(stressGraphics.ref stressGraphics.ref @COPY_ONLY) 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../tutorials/graphics/earth.dat earth.dat @COPY_ONLY)
 ROOT_ADD_TEST(test-stressgraphics COMMAND stressGraphics -b FAILREGEX "FAILED")
 
@@ -145,7 +156,14 @@ endif()
 #--stressRooStats----------------------------------------------------------------------------------
 if(ROOT_roofit_FOUND)
   ROOT_EXECUTABLE(stressRooStats stressRooStats.cxx LIBRARIES RooStats)
-  ROOT_ADD_TEST(test-stressroostats COMMAND stressRooStats FAILREGEX "FAILED")  
+  ROOT_ADD_TEST(test-stressroostats COMMAND stressRooStats -f ${CMAKE_SOURCE_DIR}/test/stressRooStats_ref.root FAILREGEX "FAILED")  
+endif()
+
+#--stressHistFactory--------------------------------------------------------------------------------
+if(ROOT_roofit_FOUND AND ROOT_xml_FOUND AND NOT WIN32)
+  ROOT_EXECUTABLE(stressHistFactory stressHistFactory.cxx LIBRARIES RooStats HistFactory XMLParser)
+  file(COPY ${CMAKE_SOURCE_DIR}/test/HistFactoryTest.tar DESTINATION  ${CMAKE_CURRENT_BINARY_DIR} )
+  ROOT_ADD_TEST(test-stressHistFactory ENVIRONMENT ROOTSYS=${CMAKE_BINARY_DIR} COMMAND stressHistFactory -f ${CMAKE_SOURCE_DIR}/test/stressHistFactory_ref.root FAILREGEX "FAILED")  
 endif()
 
 #--stressFit---------------------------------------------------------------------------------
@@ -170,11 +188,13 @@ ROOT_ADD_TEST(test-stressiterators COMMAND stressIterators FAILREGEX "FAILED")
 ROOT_EXECUTABLE(stressInterpreter stressInterpreter.cxx LIBRARIES Core)
 if(WIN32)
   set(cleantmpfiles POSTCMD cmd /c del AutoDict_*)
+  set(cfgdir /${CMAKE_BUILD_TYPE})
 endif()
 ROOT_ADD_TEST(test-stressinterpreter COMMAND stressInterpreter
               PRECMD ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/stressInterpreter.cxx 
                                               $<TARGET_FILE_DIR:stressInterpreter>/stressInterpreter.cxx
               ${cleantmpfiles}
+              ENVIRONMENT PATH=${CMAKE_BINARY_DIR}/bin${cfgdir}#$ENV{PATH}
               FAILREGEX "FAILED|Error")
 
 #--stressHepix-------------------------------------------------------------------------------
@@ -182,12 +202,13 @@ ROOT_ADD_TEST(test-stressinterpreter COMMAND stressInterpreter
 #ROOT_ADD_TEST(test-stressHepix COMMAND stressHepix FAILREGEX "FAILED")
 
 #--stressProof-------------------------------------------------------------------------------
-if(NOT WIN32)
+if(NOT WIN32 AND ROOT_xrootd_FOUND)
   add_custom_target(TestData ALL COMMAND ${CMAKE_COMMAND} -DDST=${CMAKE_SOURCE_DIR}/files -P ${CMAKE_CURRENT_SOURCE_DIR}/rootDownloadData.cmake)  
   ROOT_EXECUTABLE(stressProof stressProof.cxx LIBRARIES Proof ProofPlayer Hist)
   ROOT_ADD_TEST(test-stressproof COMMAND stressProof lite:// 
                                          -h1 ${CMAKE_SOURCE_DIR}/files/h1 -event ${CMAKE_SOURCE_DIR}/files/event
-                                         -l /tmp/stressProof-%d.log -cleanlog -noprogress
+                                         -l /tmp/stressProof-%d.log -cleanlog -catlog -noprogress
+                                         ENVIRONMENT PATH=${CMAKE_BINARY_DIR}/bin:$ENV{PATH}
                                          FAILREGEX "FAILED")  
 endif()
 

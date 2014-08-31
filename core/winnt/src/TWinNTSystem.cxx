@@ -361,7 +361,7 @@ namespace {
          dynpath = newpath;
 
       } else if (dynpath == "") {
-         TString rdynpath = gEnv->GetValue("Root.DynamicPath", (char*)0);
+         TString rdynpath = gEnv ? gEnv->GetValue("Root.DynamicPath", (char*)0) : "";
          rdynpath.ReplaceAll("; ", ";");  // in case DynamicPath was extended
          if (rdynpath == "") {
 #ifdef ROOTBINDIR
@@ -1023,13 +1023,27 @@ fGUIThreadHandle(0), fGUIThreadId(0)
    HMODULE hModCore = ::GetModuleHandle("libCore.dll");
    if (hModCore) {
       ::GetModuleFileName(hModCore, buf, MAX_MODULE_NAME32 + 1);
-      char* pLibName = strstr(buf, "libCore.dll");
+      char *pLibName = strstr(buf, "libCore.dll");
       if (pLibName) {
          --pLibName; // skip trailing \\ or /
          while (--pLibName >= buf && *pLibName != '\\' && *pLibName != '/');
          *pLibName = 0; // replace trailing \\ or / with 0
-         if (buf[0])
+         TString check_path = buf;
+         check_path += "\\etc";
+         // look for $ROOTSYS (it should contain the "etc" subdirectory)
+         while (buf[0] && GetFileAttributes(check_path.Data()) == INVALID_FILE_ATTRIBUTES) {
+            while (--pLibName >= buf && *pLibName != '\\' && *pLibName != '/');
+            *pLibName = 0;
+            check_path = buf;
+            check_path += "\\etc";
+         }
+         if (buf[0]) {
             Setenv("ROOTSYS", buf);
+            TString path = buf;
+            path += "\\bin;";
+            path += Getenv("PATH");
+            Setenv("PATH", path.Data());
+         }
       }
    }
 #endif
@@ -1142,6 +1156,17 @@ Bool_t TWinNTSystem::Init()
    gGlobalEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
    fGUIThreadHandle = ::CreateThread( NULL, 0, &GUIThreadMessageProcessingLoop, 0, 0, &fGUIThreadId );
 
+   char *buf = new char[MAX_MODULE_NAME32 + 1];
+   HMODULE hModCore = ::GetModuleHandle("libCore.dll");
+   if (hModCore) {
+      ::GetModuleFileName(hModCore, buf, MAX_MODULE_NAME32 + 1);
+      char *pLibName = strstr(buf, "libCore.dll");
+      --pLibName; // remove trailing \\ or /
+      *pLibName = 0;
+      // add the directory containing libCore.dll in the dynamic search path
+      if (buf[0]) AddDynamicPath(buf);
+   }
+   delete [] buf;
    SetConsoleWindowName();
    fGroupsInitDone = kFALSE;
    fFirstFile = kTRUE;
@@ -1228,14 +1253,14 @@ void TWinNTSystem::SetProgname(const char *name)
       }
 
       if (which) {
-         const char *dirname;
+         TString dirname;
          char driveletter = DriveName(which);
          const char *d = DirName(which);
 
          if (driveletter) {
-            dirname = Form("%c:%s", driveletter, d);
+            dirname.Form("%c:%s", driveletter, d);
          } else {
-            dirname = Form("%s", d);
+            dirname.Form("%s", d);
          }
 
          gProgPath = StrDup(dirname);
@@ -1265,10 +1290,12 @@ const char *TWinNTSystem::GetError()
    // Return system error string.
 
    Int_t err = GetErrno();
-   if (err == 0 && fLastErrorString != "")
-      return fLastErrorString;
+   if (err == 0 && GetLastErrorString() != "")
+      return GetLastErrorString();
    if (err < 0 || err >= sys_nerr) {
-      return Form("errno out of range %d", err);
+      static TString error_msg;
+      error_msg.Form("errno out of range %d", err);
+      return error_msg;
    }
    return sys_errlist[err];
 }
@@ -2472,7 +2499,7 @@ Bool_t TWinNTSystem::AccessPathName(const char *path, EAccessMode mode)
       ::SetErrorMode(nOldErrorMode);
       return kFALSE;
    }
-   fLastErrorString = GetError();
+   GetLastErrorString() = GetError();
    // restore previous error mode
    ::SetErrorMode(nOldErrorMode);
    return kTRUE;
@@ -2531,7 +2558,7 @@ int TWinNTSystem::Rename(const char *f, const char *t)
    // Rename a file. Returns 0 when successful, -1 in case of failure.
 
    int ret = ::rename(f, t);
-   fLastErrorString = GetError();
+   GetLastErrorString() = GetError();
    return ret;
 }
 
@@ -3730,7 +3757,7 @@ void TWinNTSystem::Setenv(const char *name, const char *value)
 {
    // Set environment variable.
 
-   ::_putenv(Form("%s=%s", name, value));
+   ::_putenv(TString::Format("%s=%s", name, value));
 }
 
 //______________________________________________________________________________
@@ -3807,8 +3834,8 @@ void TWinNTSystem::Exit(int code, Bool_t mode)
          TBrowser *b;
          TIter next(gROOT->GetListOfBrowsers());
          while ((b = (TBrowser*) next()))
-            gROOT->ProcessLine(Form("((TBrowser*)0x%lx)->GetBrowserImp()->GetMainFrame()->CloseWindow();",
-                                    (ULong_t)b));
+            gROOT->ProcessLine(TString::Format("((TBrowser*)0x%lx)->GetBrowserImp()->GetMainFrame()->CloseWindow();",
+                                               (ULong_t)b));
       }
    } else if (gInterpreter) {
       gInterpreter->ResetGlobals();
@@ -3996,8 +4023,8 @@ char *TWinNTSystem::DynamicPathName(const char *lib, Bool_t quiet)
    if (len > 4 && (!stricmp(lib+len-4, ".dll"))) {
       name = gSystem->Which(GetDynamicPath(), lib, kReadPermission);
    } else {
-      name = Form("%s.dll", lib);
-      name = gSystem->Which(GetDynamicPath(), name, kReadPermission);
+      TString name_dll; name_dll.Form("%s.dll", lib);
+      name = gSystem->Which(GetDynamicPath(), name_dll, kReadPermission);
    }
 
    if (!name && !quiet) {

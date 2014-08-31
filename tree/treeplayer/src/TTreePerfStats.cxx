@@ -288,22 +288,26 @@ void TTreePerfStats::FileReadEvent(TFile *file, Int_t len, Double_t start)
       fDiskTime += dtime;
       fGraphTime->SetPoint(np,entry,tnow);
       fGraphTime->SetPointError(np,0.001,dtime);
+      fReadCalls++;
+      fBytesRead += len;
    }
 }
 
 
 //______________________________________________________________________________
-void TTreePerfStats::FileUnzipEvent(TFile * /* file */, Long64_t /* pos */, Double_t start, Int_t /* complen */, Int_t /* objlen */)
+void TTreePerfStats::UnzipEvent(TObject * tree, Long64_t /* pos */, Double_t start, Int_t /* complen */, Int_t /* objlen */)
 {
-   // Record TTree file unzip event.
+   // Record TTree unzip event.
    // start is the TimeStamp before unzip
    // pos is where in the file the compressed buffer came from
    // complen is the length of the compressed buffer
    // objlen is the length of the de-compressed buffer
    
-   Double_t tnow = TTimeStamp();
-   Double_t dtime = tnow-start;
-   fUnzipTime += dtime;
+   if (tree == this->fTree){
+      Double_t tnow = TTimeStamp();
+      Double_t dtime = tnow-start;
+      fUnzipTime += dtime;
+   }
 }
 
 //______________________________________________________________________________
@@ -312,14 +316,12 @@ void TTreePerfStats::Finish()
    // When the run is finished this function must be called
    // to save the current parameters in the file and Tree in this object
    // the function is automatically called by Draw and Print
-   
-   if (fReadCalls)  return;  //has already been called
+
+   if (fRealNorm)   return;  //has already been called
    if (!fFile)      return;
    if (!fTree)      return;
-   fReadCalls     = fFile->GetReadCalls();
    fTreeCacheSize = fTree->GetCacheSize();
    fReadaheadSize = TFile::GetReadaheadSize();
-   fBytesRead     = fFile->GetBytesRead();
    fBytesReadExtra= fFile->GetBytesReadExtra();
    fRealTime      = fWatch->RealTime();
    fCpuTime       = fWatch->CpuTime();

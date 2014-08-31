@@ -61,6 +61,11 @@ CINTCFLAGS    = -m64 -pipe -W -Wall -fsigned-char -fno-common \
                 -DG__STD_EXCEPTION $(TARGETFLAGS)
 COMPILER      = gnu
 
+ifeq ($(WERROR),yes)
+CXXFLAGS     += -Werror
+NOOPT        += -pedantic -Wno-long-long
+endif
+
 # Linker:
 ifeq ($(subst $(APPLE_CLANG),,12),12)
 LD            = clang++
@@ -147,6 +152,14 @@ MACOSX_ODBC_DEPRECATED = yes
 MACOSX_GLU_DEPRECATED = yes
 MACOSX_KRB5_DEPRECATED = yes
 MACOSX_TMPNAM_DEPRECATED = yes
+endif
+ifeq ($(MACOSX_MINOR),10)
+MACOSX_SSL_DEPRECATED = yes
+MACOSX_ODBC_DEPRECATED = yes
+MACOSX_GLU_DEPRECATED = yes
+MACOSX_KRB5_DEPRECATED = yes
+MACOSX_TMPNAM_DEPRECATED = yes
+MACOSX_LDAP_DEPRECATED = yes
 endif
 
 ifeq ($(CONFIGURE),yes)

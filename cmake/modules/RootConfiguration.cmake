@@ -6,7 +6,7 @@ set(valueON yes)
 set(valueOFF no)
 
 set(ROOT_DICTTYPE cint)
-set(ROOT_CONFIGARGS "")
+#set(ROOT_CONFIGARGS "")
 set(top_srcdir ${CMAKE_SOURCE_DIR})
 set(top_builddir ${CMAKE_BINARY_DIR})
 set(architecture ${ROOT_ARCHITECTURE})
@@ -72,8 +72,8 @@ set(xpmlibdir -L${X11_LIBRARY_DIR})
 set(xpmlib ${X11_Xpm_LIB})
 set(enable_xft ${value${xft}})
 
-set(enable_thread yes)
-set(threadflag)
+set(enable_thread ${value${thread}})
+set(threadflag ${CMAKE_THREAD_FLAG})
 set(threadlibdir)
 set(threadlib ${CMAKE_THREAD_LIBS_INIT})
 
@@ -151,6 +151,13 @@ set(builddavix ${value${davix}})
 set(davixlibdir ${DAVIX_LIBRARY_DIR})
 set(davixlib ${DAVIX_LIBRARY})
 set(davixincdir ${DAVIX_INCLUDE_DIR})
+
+set(buildnetxng ${value${netxng}})
+if(netxng)
+  set(useoldnetx no)
+else()
+  set(useoldnetx yes)
+endif()
 
 set(builddcap ${value${dcap}})
 set(dcaplibdir ${DCAP_LIBRARY_DIR})
@@ -325,6 +332,7 @@ set(buildroofit ${value${roofit}})
 set(buildminuit2 ${value${minuit2}})
 set(buildunuran ${value${unuran}})
 set(buildgdml ${value${gdml}})
+set(buildhttp ${value${http}})
 set(buildtable ${value${table}})
 set(buildtmva ${value${tmva}})
 
@@ -358,20 +366,21 @@ set(hasxft ${has${xft}})
 set(hascling ${has${cling}})
 set(haslzmacompression ${has${lzma}})
 set(hascocoa ${has${cocoa}})
-set(usec++11 ${has${c++11}})
+set(hasvc ${has${vc}})
+set(usec++11 ${has${cxx11}})
 set(uselibc++ ${has${libcxx}})
 
 
 #---root-config----------------------------------------------------------------------------------------------
 ROOT_SHOW_OPTIONS(features)
-string(REPLACE "c++11" "cxx11" features ${features}) # change the name of the c++11 feature needed for root-config.in
 set(configfeatures ${features})
 set(configargs ${ROOT_CONFIGARGS})
 set(configoptions ${ROOT_CONFIGARGS})
-set(altcc ${CMAKE_C_COMPILER})
-set(altcxx ${CMAKE_CXX_COMPILER})
-set(altf77 ${CMAKE_Fortran_COMPILER})
-set(altld ${CMAKE_CXX_COMPILER})
+get_filename_component(altcc ${CMAKE_C_COMPILER} NAME)
+get_filename_component(altcxx ${CMAKE_CXX_COMPILER} NAME)
+get_filename_component(altf77 "${CMAKE_Fortran_COMPILER}" NAME)
+get_filename_component(altld ${CMAKE_CXX_COMPILER} NAME)
+
 set(pythonvers ${PYTHON_VERSION})
 
 #---CINT Configuration---------------------------------------------------------------------------------------
@@ -398,11 +407,7 @@ configure_file(${CMAKE_SOURCE_DIR}/config/RConfigOptions.in include/RConfigOptio
 if(ruby)
   file(APPEND ${CMAKE_BINARY_DIR}/include/RConfigOptions.h "\#define R__RUBY_MAJOR ${RUBY_MAJOR_VERSION}\n\#define R__RUBY_MINOR ${RUBY_MINOR_VERSION}\n")
 endif()
-if(WIN32)
-  configure_file(${CMAKE_SOURCE_DIR}/cmake/scripts/compiledata.win32.in include/compiledata.h)
-else()
-  configure_file(${CMAKE_SOURCE_DIR}/cmake/scripts/compiledata.in include/compiledata.h)
-endif()
+
 configure_file(${CMAKE_SOURCE_DIR}/config/Makefile-comp.in config/Makefile.comp)
 configure_file(${CMAKE_SOURCE_DIR}/config/Makefile.in config/Makefile.config)
 configure_file(${CMAKE_SOURCE_DIR}/config/mimes.unix.in ${CMAKE_BINARY_DIR}/etc/root.mimes)
@@ -413,6 +418,12 @@ configure_file(${CMAKE_SOURCE_DIR}/cmake/scripts/ROOTConfig-version.cmake.in
                ${CMAKE_BINARY_DIR}/ROOTConfig-version.cmake @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/cmake/scripts/RootUseFile.cmake.in
                ${CMAKE_BINARY_DIR}/ROOTUseFile.cmake @ONLY)
+
+#---Compiler flags (because user apps are a bit dependent on them...)----------------------------------------
+set(ROOT_COMPILER_FLAG_HINTS "#
+set(ROOT_CXX_FLAGS \"${CMAKE_CXX_FLAGS}\")
+set(ROOT_EXE_LINKER_FLAGS \"${CMAKE_EXE_LINKER_FLAGS}\")")
+
 #---To be used from the binary tree--------------------------------------------------------------------------
 get_property(buildtree_include_dirs GLOBAL PROPERTY ROOT_INCLUDE_DIRS)
 list(REMOVE_DUPLICATES buildtree_include_dirs)
@@ -439,17 +450,22 @@ configure_file(${CMAKE_SOURCE_DIR}/cmake/scripts/ROOTConfig.cmake.in
                ${CMAKE_BINARY_DIR}/ROOTConfig.cmake @ONLY)
 
 #---To be used from the install tree--------------------------------------------------------------------------
+# Need to calculate actual relative paths from CMAKEDIR to other locations
+file(RELATIVE_PATH ROOT_CMAKE_TO_INCLUDE_DIR "${CMAKE_INSTALL_FULL_CMAKEDIR}" "${CMAKE_INSTALL_FULL_INCLUDEDIR}")
+file(RELATIVE_PATH ROOT_CMAKE_TO_LIB_DIR "${CMAKE_INSTALL_FULL_CMAKEDIR}" "${CMAKE_INSTALL_FULL_LIBDIR}")
+file(RELATIVE_PATH ROOT_CMAKE_TO_BIN_DIR "${CMAKE_INSTALL_FULL_CMAKEDIR}" "${CMAKE_INSTALL_FULL_BINDIR}")
+
 set(ROOT_INCLUDE_DIR_SETUP "
 # ROOT configured for the install with relative paths, so use these
-get_filename_component(ROOT_INCLUDE_DIRS \"\${_thisdir}/../include\" ABSOLUTE)
+get_filename_component(ROOT_INCLUDE_DIRS \"\${_thisdir}/${ROOT_CMAKE_TO_INCLUDE_DIR}\" ABSOLUTE)
 ")
 set(ROOT_LIBRARY_DIR_SETUP "
 # ROOT configured for the install with relative paths, so use these
-get_filename_component(ROOT_LIBRARY_DIR \"\${_thisdir}/../lib\" ABSOLUTE)
+get_filename_component(ROOT_LIBRARY_DIR \"\${_thisdir}/${ROOT_CMAKE_TO_LIB_DIR}\" ABSOLUTE)
 ")
 set(ROOT_BINARY_DIR_SETUP "
 # ROOT configured for the install with relative paths, so use these
-get_filename_component(ROOT_BINARY_DIR \"\${_thisdir}/../bin\" ABSOLUTE)
+get_filename_component(ROOT_BINARY_DIR \"\${_thisdir}/${ROOT_CMAKE_TO_BIN_DIR}\" ABSOLUTE)
 ")
 set(ROOT_MODULE_PATH_SETUP "
 # ROOT configured for use CMake modules from installation tree
@@ -472,6 +488,19 @@ if(prefix STREQUAL "$(ROOTSYS)")
   set(etcdir $ROOTSYS/etc)
   set(mandir $ROOTSYS/man/man1)
 endif()
+
+
+#---compiledata.h--------------------------------------------------------------------------------------------
+if(WIN32)
+  # We cannot use the compiledata.sh script for windows
+  configure_file(${CMAKE_SOURCE_DIR}/cmake/scripts/compiledata.win32.in include/compiledata.h)
+else()
+  execute_process(COMMAND ${CMAKE_SOURCE_DIR}/build/unix/compiledata.sh include/compiledata.h "${CXX}" ""
+       "${CMAKE_CXX_FLAGS_${uppercase_CMAKE_BUILD_TYPE}}"
+        "${CMAKE_CXX_FLAGS}" "${CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS}" "${CMAKE_EXE_FLAGS}" "${LibSuffix}" "${SYSLIBS}"
+        "${libdir}" "-lCore" "-Rint" "${incdir}" "" "" "${ROOT_ARCHITECTURE}" "" "${explicitlink}" )
+endif()
+
 configure_file(${CMAKE_SOURCE_DIR}/config/root-config.in ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/root-config @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/config/memprobe.in ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/memprobe @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/config/thisroot.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/thisroot.sh @ONLY)
@@ -483,7 +512,9 @@ configure_file(${CMAKE_SOURCE_DIR}/config/genreflex-rootcint.in ${CMAKE_RUNTIME_
 configure_file(${CMAKE_SOURCE_DIR}/config/proofserv.in ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/proofserv @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/config/roots.in ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/roots @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/config/root-help.el.in root-help.el @ONLY)
-
+if (XROOTD_FOUND AND XROOTD_NOMAIN)
+  configure_file(${CMAKE_SOURCE_DIR}/config/xproofd.in ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/xproofd @ONLY)
+endif()
 if(WIN32)
   set(thisrootbat ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/thisroot.bat)
   configure_file(${CMAKE_SOURCE_DIR}/config/thisroot.bat ${thisrootbat} @ONLY)
@@ -506,6 +537,14 @@ install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/genreflex
                           WORLD_EXECUTE WORLD_READ 
               DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+if (XROOTD_FOUND AND XROOTD_NOMAIN)
+   install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/xproofd
+                 PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ 
+                             GROUP_EXECUTE GROUP_READ 
+                             WORLD_EXECUTE WORLD_READ 
+                 DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
 install(FILES ${CMAKE_BINARY_DIR}/include/RConfigOptions.h
               ${CMAKE_BINARY_DIR}/include/compiledata.h 
               DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
@@ -515,6 +554,12 @@ install(FILES ${CMAKE_BINARY_DIR}/etc/root.mimes
               DESTINATION ${CMAKE_INSTALL_SYSCONFDIR})
               
 install(FILES ${CMAKE_BINARY_DIR}/root-help.el DESTINATION ${CMAKE_INSTALL_ELISPDIR})
+
+if(NOT gnuinstall)
+  install(FILES ${CMAKE_BINARY_DIR}/config/Makefile.comp
+                ${CMAKE_BINARY_DIR}/config/Makefile.config
+                DESTINATION config)
+endif()
 
 endfunction()
 RootConfigure()

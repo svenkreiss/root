@@ -57,9 +57,7 @@ add_custom_command(OUTPUT loadfile_tmp.cxx
 set_source_files_properties(loadfile_tmp.cxx  COMPILE_FLAGS "-UR__HAVE_CONFIG -DROOTBUILD ${CINT_TMP_INC}")
 
 #---Generate and/or copy the iosenum headerfile to the include directory-------------------------------
-if(${CLANG_MAJOR} EQUAL 2)
-  set(IOSENUM_H ${PROJECT_SOURCE_DIR}/cint/iosenum/iosenum.${ROOT_ARCHITECTURE}3)
-elseif(${CLANG_MAJOR} EQUAL 3)
+if(${CLANG_MAJOR} GREATER 2)
   set(IOSENUM_H ${PROJECT_SOURCE_DIR}/cint/iosenum/iosenum.${ROOT_ARCHITECTURE}3)
 elseif(${GCC_MAJOR} EQUAL 4)
   set(IOSENUM_H ${PROJECT_SOURCE_DIR}/cint/iosenum/iosenum.${ROOT_ARCHITECTURE}3)
@@ -90,6 +88,7 @@ add_custom_target(IOSENUM_H
    COMMAND cmake -E copy ${CMAKE_CURRENT_BINARY_DIR}/iosenum.h  ${HEADER_OUTPUT_PATH}/iosenum.h
    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/iosenum.h 
 )
+set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${HEADER_OUTPUT_PATH}/iosenum.h)
 install(FILES ${HEADER_OUTPUT_PATH}/iosenum.h DESTINATION ${CMAKE_INSTALL_CINTINCDIR}/cint/include)
 
 set_target_properties(IOSENUM_H PROPERTIES FOLDER Builtins)
@@ -117,6 +116,11 @@ endforeach()
 
 
 include_directories(src)
+if(MACOSX_TMPNAM_DEPRECATED)
+  add_definitions(-Wno-deprecated-declarations)
+  add_definitions(-Wno-constant-logical-operand)
+endif()
+
 
 #---Define libraries and executables to be build------------------------------------------------------------
 

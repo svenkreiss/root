@@ -573,10 +573,10 @@ bool Fitter::CalculateHessErrors() {
 bool Fitter::CalculateMinosErrors() { 
    // compute the Minos errors according to configuration
    // set in the parameters and append value in fit result
+   // normally Minos errors are computed just after the minimization 
+   // (in DoMinimization) when creating the FItResult if the 
+   //  FitConfig::MinosErrors() flag is set
    
-   // in case it has not been set - set by default Minos on all parameters 
-   fConfig.SetMinosErrors(); 
-
    if (!fMinimizer.get() ) { 
        MATH_ERROR_MSG("Fitter::CalculateMinosErrors","Minimizer does not exist - cannot calculate Minos errors");
        return false; 
@@ -591,6 +591,10 @@ bool Fitter::CalculateMinosErrors() {
       MATH_ERROR_MSG("Fitter::CalculateMinosErrors","Computation of MINOS errors not implemented for weighted likelihood fits");
       return false;
    }
+
+   // set flag to compute Minos error to false in FitConfig to avoid that 
+   // following minimizaiton calls perform unwanted Minos error calculations
+   fConfig.SetMinosErrors(false);
 
 
    const std::vector<unsigned int> & ipars = fConfig.MinosParams(); 
@@ -732,6 +736,7 @@ void Fitter::DoUpdateFitConfig() {
 
 int Fitter::GetNCallsFromFCN() { 
    // retrieve ncalls from the fit method functions
+   // this function is called when minimizer does not provide a way of returning the nnumber of function calls
    int ncalls = 0;
    if (!fUseGradient) { 
       const ROOT::Math::FitMethodFunction * fcn = dynamic_cast<const ROOT::Math::FitMethodFunction *>(fObjFunction.get());

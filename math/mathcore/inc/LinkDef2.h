@@ -82,10 +82,14 @@
 
 #pragma link C++ class ROOT::Math::Minimizer+;
 #pragma link C++ class ROOT::Math::MinimizerOptions+;
+#pragma link C++ class ROOT::Math::MinimTransformFunction-;
+#pragma link C++ class ROOT::Math::MinimTransformVariable+;
+#pragma link C++ class ROOT::Math::BasicMinimizer+;
 #pragma link C++ class ROOT::Math::IntegratorOneDimOptions+;
 #pragma link C++ class ROOT::Math::IntegratorMultiDimOptions+;
 #pragma link C++ class ROOT::Math::BaseIntegratorOptions+;
 #pragma link C++ class ROOT::Math::IOptions+;
+#pragma link C++ class ROOT::Math::GenAlgoOptions+;
 #pragma link C++ class ROOT::Math::IntegratorOneDim+;
 #pragma link C++ class ROOT::Math::IntegratorMultiDim+;
 #pragma link C++ class ROOT::Math::VirtualIntegrator+;

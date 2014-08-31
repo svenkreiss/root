@@ -372,9 +372,9 @@ Int_t TChain::Add(const char* name, Long64_t nentries /* = kBigNumber */)
       while ((obj = (TObjString*)next())) {
          file = obj->GetName();
          if (behind_dot_root.Length() != 0)
-            nf += AddFile(Form("%s/%s/%s",directory.Data(),file,behind_dot_root.Data()),nentries);
+            nf += AddFile(TString::Format("%s/%s/%s",directory.Data(),file,behind_dot_root.Data()),nentries);
          else
-            nf += AddFile(Form("%s/%s",directory.Data(),file),nentries);
+            nf += AddFile(TString::Format("%s/%s",directory.Data(),file),nentries);
       }
       l.Delete();
    }
@@ -1516,7 +1516,9 @@ Long64_t TChain::LoadTree(Long64_t entry)
          tpf = 0;
       }
    } else {
-      this->SetCacheSize(fCacheSize);
+      if (fCacheUserSet) {
+         this->SetCacheSize(fCacheSize);
+      }
    }
 
    // Check if fTreeOffset has really been set.
@@ -2197,6 +2199,9 @@ void TChain::SetCacheSize(Long64_t cacheSize)
 {
    // Set the cache size of the underlying TTree,
    // See TTree::SetCacheSize.
+
+   // remember user has requested this cache setting
+   fCacheUserSet = kTRUE;
 
    if (fTree) {
       fTree->SetCacheSize(cacheSize);

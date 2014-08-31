@@ -202,6 +202,8 @@ Begin_Macro(source)
    Int_t nb=50;
    TColor::CreateGradientColorTable(Number,Length,Red,Green,Blue,nb);
    f2->SetContour(nb);
+   f2->SetLineWidth(1);
+   f2->SetLineColor(kBlack);
    f2->Draw("surf1z");
    return c2;
 }
@@ -246,20 +248,46 @@ To make a graphics object transparent it is enough to set its color to a
 transparent one. The color transparency is defined via its alpha component. The
 alpha value varies from <tt>0.</tt> (fully transparent) to <tt>1.</tt> (fully
 opaque). To set the alpha value of an existing color it is enough to do:
+<p>
 <pre>
    TColor *col26 = gROOT->GetColor(26);
    col26->SetAlpha(0.01);
 </pre>
+<p>
 A new color can be created transparent the following way:
+<p>
 <pre>
    Int_t ci = 1756;
    TColor *color = new TColor(ci, 0.1, 0.2, 0.3, "", 0.5); // alpha = 0.5
 </pre>
+<p>
 An example of tranparency usage with parallel coordinates can be found
-in <tt>$ROOTSYS/tutorials/tree/parallelcoordtrans.C</tt>. Right now the
-transparency is implemented only for PDF output, SVG output, and for gif,
-jpg and png outputs.
-
+in <tt>$ROOTSYS/tutorials/tree/parallelcoordtrans.C</tt>.
+<p>
+To ease the creation of a transparent color the static method 
+<tt>GetColorTransparent(Int_t color, Float_t a)</tt> is provided.
+In the following example the <tt>trans_red</tt> color index point to
+a red color 30% transparent. The alpha value of the color index
+<tt>kRed</tt> is not modified.
+<p>
+<pre>
+   Int_t trans_red = GetColorTransparent(kRed, 0.3);
+</pre>
+<p>
+This function is also used in the methods 
+<tt>SetFillColorAlpha()</tt>, <tt>SetLineColorAlpha()</tt>,
+<tt>SetMarkerColorAlpha()</tt> and <tt>SetTextColorAlpha()</tt>.
+In the following example the fill color of the histogram <tt>histo</tt>
+is set to blue with a transparency of 35%. The color <tt>kBlue</tt>
+itself remains fully opaque.
+<p>
+<pre>
+   histo->SetFillColorAlpha(kBlue, 0.35);
+</pre>
+<p>
+The transparency is available on all platforms when the <tt>flagOpenGL.CanvasPreferGL</tt> is set to <tt>1</tt>
+in <tt>$ROOTSYS/etc/system.rootrc</tt>, or on Mac with the Cocoa backend. On the file output
+it is visible with PDF, PNG, Gif, JPEG, SVG ... but not PostScript.
 End_Html */
 
 
@@ -1260,6 +1288,25 @@ Int_t TColor::GetColorDark(Int_t n)
 
 
 //______________________________________________________________________________
+Int_t TColor::GetColorTransparent(Int_t n, Float_t a)
+{
+   /* Begin_html
+   Static function: Returns the transparent color number corresponding to n.
+   The transparency level is given by the alpha value a.
+   End_html */
+   
+   if (n < 0) return -1;
+   
+   TColor *color = gROOT->GetColor(n);
+   TColor *colort = new TColor(gROOT->GetListOfColors()->GetLast()+1,
+                               color->GetRed(), color->GetGreen(), color->GetBlue());
+   colort->SetAlpha(a);
+   colort->SetName(Form("%s_transparent",color->GetName()));
+   return colort->GetNumber();
+}   
+
+
+//______________________________________________________________________________
 ULong_t TColor::Number2Pixel(Int_t ci)
 {
    /* Begin_html
@@ -1394,27 +1441,37 @@ void TColor::SaveColor(std::ostream &out, Int_t ci)
    End_html */
 
    char quote = '"';
-   Float_t r,g,b;
+   Float_t r,g,b,a;
    Int_t ri, gi, bi;
    TString cname;
 
    TColor *c = gROOT->GetColor(ci);
-   if (c) c->GetRGB(r, g, b);
-   else return;
-
-   ri = (Int_t)(255*r);
-   gi = (Int_t)(255*g);
-   bi = (Int_t)(255*b);
-   cname.Form("#%02x%02x%02x", ri, gi, bi);
+   if (c) {
+      c->GetRGB(r, g, b);
+      a = c->GetAlpha();
+   } else {
+      return;
+   }
 
    if (gROOT->ClassSaved(TColor::Class())) {
       out << std::endl;
    } else {
       out << std::endl;
-      out << "   Int_t ci;   // for color index setting" << std::endl;
+      out << "   Int_t ci;      // for color index setting" << std::endl;
+      out << "   TColor *color; // for color definition with alpha" << std::endl;
    }
 
-   out<<"   ci = TColor::GetColor("<<quote<<cname.Data()<<quote<<");"<<std::endl;
+   if (a<1) {
+      out<<"   ci = "<<ci<<";"<<std::endl;
+      out<<"   color = new TColor(ci, "<<r<<", "<<g<<", "<<b<<", "
+      <<"\" \", "<<a<<");"<<std::endl;
+   } else {
+      ri = (Int_t)(255*r);
+      gi = (Int_t)(255*g);
+      bi = (Int_t)(255*b);
+      cname.Form("#%02x%02x%02x", ri, gi, bi);
+      out<<"   ci = TColor::GetColor("<<quote<<cname.Data()<<quote<<");"<<std::endl;
+   }
 }
 
 
@@ -1606,7 +1663,7 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
    <p>
    <tt>if ncolors == 1 && colors == 0</tt>, then a Pretty Palette with a
    Spectrum Violet->Red is created with 50 colors. That's the default rain bow
-   pallette.
+   palette.
    <p>
    Other prefined palettes with 255 colors are available when <tt>colors == 0</tt>.
    The following value of <tt>ncolors</tt> give access to:
@@ -1725,7 +1782,7 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
       paletteType = 7;
       return;
    }
- 
+
    // set Inverted Dark Body Radiator palette
    if (ncolors == 56 && colors == 0) {
       TColor::InitializeColors();

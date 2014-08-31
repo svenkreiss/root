@@ -186,7 +186,9 @@ TEveProjected::~TEveProjected()
 //______________________________________________________________________________
 TEveElement* TEveProjected::GetProjectedAsElement()
 {
-   // Returns fProjectable dynamic-casted to TEveElement.
+   // Returns this projected dynamic-casted to TEveElement.
+   // This is needed as class TEveProjected is used as secondary
+   // inheritance.
 
    return dynamic_cast<TEveElement*>(this);
 }
@@ -210,7 +212,7 @@ void TEveProjected::UnRefProjectable(TEveProjectable* assumed_parent, bool notif
    // Remove reference to projectable.
 
    static const TEveException eH("TEveProjected::UnRefProjectable ");
-
+   (void)assumed_parent;
    assert(fProjectable == assumed_parent);
 
    if (notifyParent) fProjectable->RemoveProjected(this);

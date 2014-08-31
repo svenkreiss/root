@@ -1288,6 +1288,9 @@ namespace HistFactory{
 		      << std::endl;
 	    statErrorHist = MakeAbsolUncertaintyHist( UncertName, nominal );
 	  } else {
+             // clone the error histograms because in case the sample has not error hist
+             // it is created in MakeAbsolUncertainty
+             // we need later to clean statErrorHist
 	    statErrorHist = (TH1*) sample.GetStatError().GetErrorHist()->Clone();
 	    // We assume the (relative) error is provided.
 	    // We must turn it into an absolute error
@@ -1652,6 +1655,15 @@ namespace HistFactory{
 							     statConstraintType, 
 							     statRelErrorThreshold);
 
+
+      // clean stat hist pair (need to delete second histogram)
+      for (unsigned int i = 0; i < statHistPairs.size() ; ++i )  
+              delete statHistPairs[i].second;
+      
+       statHistPairs.clear(); 
+       //delete also histogram of stat uncertainties created in MakeScaledUncertaintyHist
+       delete fracStatError;
+
     } // END: Loop over stat Hist Pairs
     
     
@@ -1706,7 +1718,7 @@ namespace HistFactory{
     for(unsigned int i=0; i<likelihoodTermNames.size(); ++i){
       RooAbsArg* proto_arg = (proto->arg(likelihoodTermNames[i].c_str())); 
       if( proto_arg==NULL ) {
-	std::cout << "Error: Cannot find arg set: " << constraintTermNames.at(i)
+	std::cout << "Error: Cannot find arg set: " << likelihoodTermNames.at(i)
 		  << " in workspace: " << proto->GetName() << std::endl;
 	throw hf_exc();
       }

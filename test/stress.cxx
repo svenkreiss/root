@@ -120,6 +120,7 @@ void cleanup();
 
 int main(int argc, char **argv)
 {
+   gROOT->SetBatch();
    TApplication theApp("App", &argc, argv);
    gBenchmark = new TBenchmark();
    Int_t nevent = 1000;      // by default create 1000 events
@@ -136,6 +137,8 @@ int main(int argc, char **argv)
 
 #endif
 
+class TPostScript;
+class TPad;
 class TH1;
 class TTree;
 

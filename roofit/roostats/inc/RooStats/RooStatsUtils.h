@@ -41,7 +41,7 @@ namespace RooStats {
 
   // returns one-sided significance corresponding to a p-value
   inline Double_t PValueToSignificance(Double_t pvalue){
-     return ::ROOT::Math::normal_quantile_c(pvalue,1); 
+     return ::ROOT::Math::normal_quantile_c(pvalue,1);
   }
 
   // returns p-value corresponding to a 1-sided significance
@@ -57,8 +57,8 @@ namespace RooStats {
   inline void RemoveConstantParameters(RooArgSet* set){
     RooArgSet constSet;
     RooLinkedListIter it = set->iterator();
-    RooRealVar *myarg; 
-    while ((myarg = (RooRealVar *)it.Next())) { 
+    RooRealVar *myarg;
+    while ((myarg = (RooRealVar *)it.Next())) {
       if(myarg->isConstant()) constSet.add(*myarg);
     }
     set->remove(constSet);
@@ -67,8 +67,8 @@ namespace RooStats {
   inline void RemoveConstantParameters(RooArgList& set){
     RooArgSet constSet;
     RooLinkedListIter it = set.iterator();
-    RooRealVar *myarg; 
-    while ((myarg = (RooRealVar *)it.Next())) { 
+    RooRealVar *myarg;
+    while ((myarg = (RooRealVar *)it.Next())) {
       if(myarg->isConstant()) constSet.add(*myarg);
     }
     set.remove(constSet);
@@ -97,8 +97,8 @@ namespace RooStats {
     RooLinkedListIter it = set.iterator();
     RooRealVar* var;
 
-    // repeat loop tpo avoid calling isConstant for nothing 
-    if (randomizeConstants) { 
+    // repeat loop tpo avoid calling isConstant for nothing
+    if (randomizeConstants) {
        while ((var = (RooRealVar*)it.Next()) != NULL)
          var->randomize();
     }
@@ -122,13 +122,13 @@ namespace RooStats {
    // remove constraints from pdf and return the unconstrained pdf
    RooAbsPdf * MakeUnconstrainedPdf(RooAbsPdf &pdf, const RooArgSet &observables, const char *name = NULL);
    RooAbsPdf * MakeUnconstrainedPdf(const RooStats::ModelConfig &model, const char *name = NULL);
-   
+
    // Create a TTree with the given name and description. All RooRealVars in the RooDataSet are represented as branches that contain values of type Double_t.
    TTree* GetAsTTree(TString name, TString desc, const RooDataSet& data);
 
-   // Return the contour level for this histogram that will create the 
+   // Return the contour level for this histogram that will create the
    // highest-probability-density interval for this integralValue.
-   double ContourLevelHPD( TH1* h, double integralValue );      
+   double ContourLevelHPD( TH1* h, double integralValue );
    // h1 and h2 are histograms with equal shapes. h1 is overwritten with the
    // minimum between h1 and h2 in each bin.
    void HistMin( TH1* h1, TH1* h2 );
@@ -148,6 +148,10 @@ namespace RooStats {
    TH2* ProfileMinOntoXY( TH3& h3, bool subtractMin = false );
    TH2* ProfileMinOntoYZ( TH3& h3, bool subtractMin = false );
    TH2* ProfileMinOntoXZ( TH3& h3, bool subtractMin = false );
+
+   // useful function to print in one line the content of a set with their values
+   void PrintListContent(const RooArgList & l, std::ostream & os = std::cout);
+
 }
 
 

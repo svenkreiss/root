@@ -67,4 +67,11 @@ distclean-$(MODNAME): clean-$(MODNAME)
 distclean::     distclean-$(MODNAME)
 
 ##### extra rules ######
-$(DCACHEO) $(DCACHEDO): CXXFLAGS += $(DCAPINCDIR:%=-I%)
+$(DCACHEO) $(DCACHEDO): CXXFLAGS := $(filter-out -Wall,$(CXXFLAGS)) $(DCAPINCDIR:%=-I%)
+ifeq ($(GCC_MAJOR),4)
+ifeq ($(subst $(GCC_MINOR),,0 1 2),0 1 2)
+# GCC >= 4.3
+   $(DCACHEO) $(DCACHEDO):  CXXFLAGS += -Wno-ignored-qualifiers
+endif
+endif
+

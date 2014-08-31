@@ -28,6 +28,7 @@ MKLIBOPTIONS   := @mkliboption@
 EXTRA_CFLAGS   := -Iinclude @cflags@
 EXTRA_CXXFLAGS := -Iinclude @cflags@
 EXTRA_LDFLAGS  := @ldflags@
+WERROR         := @werror@
 WINRTDEBUG     := @winrtdebug@
 
 GLBPATCHFLAGS  := @glbpatchcflags@
@@ -273,6 +274,8 @@ XRDVERSION     := @xrdversion@
 HASXRDUTILS    := @hasxrdutils@
 XRDINCPRIVATE  := @xrdincprivate@
 BUILDNETXNG    := @buildnetxng@
+BUILDXPROOFD   := @buildxproofd@
+BUILDXRDCLT    := @buildxrdclt@
 
 SRPLIBDIR      := @srplibdir@
 SRPLIB         := @srplib@
@@ -355,6 +358,13 @@ BUILDMINUIT2   := @buildminuit2@
 
 BUILDUNURAN    := @buildunuran@
 
+BUILDVC        := @buildvc@
+AVXCXXFLAG     := @avxcxxflag@
+SIMDCXXFLAGS   := @avxcxxflag@ @ssecxxflags@
+VCFLAGS        := @abiversioncxxflag@ @vcflags@
+
+BUILDVDT       := @buildvdt@
+
 BUILDGDML      := @buildgdml@
 
 BUILDTABLE     := @buildtable@
@@ -363,6 +373,13 @@ BUILDTMVA      := @buildtmva@
 
 BUILDAFDSMGRD  := @buildafdsmgrd@
 AFDSMGRDAPMON  := @afdsmgrdapmon@
+
+BUILDHTTP      := @buildhttp@
+USEFASCGI      := @usefastcgi@
+FASTCGIINCDIR  := @fastcgiincdir@
+ifeq ($(USEFASCGI), no)
+FASTCGIFLAGS   := -DHTTP_WITHOUT_FASTCGI
+endif
 
 CPPUNIT        := @cppunit@
 GCCXML         := @gccxml@

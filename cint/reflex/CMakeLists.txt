@@ -6,6 +6,7 @@ if(CMAKE_PROJECT_NAME STREQUAL ROOT)
   ROOT_USE_PACKAGE(core/clib)
   ROOT_USE_PACKAGE(core/meta)
   ROOT_USE_PACKAGE(core/cont)  
+  ROOT_USE_PACKAGE(core/thread)
   ROOT_USE_PACKAGE(cint/cint)
   
   ROOT_GLOB_HEADERS(headers RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/inc 
@@ -15,7 +16,7 @@ if(CMAKE_PROJECT_NAME STREQUAL ROOT)
                            Reflex/SharedLibrary.h Reflex/DictionaryGenerator.h)
   #---Rootcint dictionary ---------------------------------------------------
   ROOT_GENERATE_DICTIONARY(G__Reflex ${headers} LINKDEF LinkDef.h OPTIONS -p)
-  ROOT_GENERATE_ROOTMAP(Reflex LINKDEF LinkDef.h DEPENDENCIES )
+  ROOT_GENERATE_ROOTMAP(ReflexDict LINKDEF LinkDef.h DEPENDENCIES Reflex )
   ROOT_MODULE_LIBRARY(ReflexDict G__Reflex.cxx LIBRARIES Reflex Cint Core)
   #---Reflex library---------------------------------------------------------
   ROOT_LINKER_LIBRARY(Reflex *.cxx LIBRARIES ${CMAKE_DL_LIBS})  

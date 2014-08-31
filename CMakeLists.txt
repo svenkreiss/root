@@ -9,7 +9,7 @@ set(IntegratedBuild ON)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(ROOTSYS ${CMAKE_SOURCE_DIR})
+set(ROOTSYS ${CMAKE_BINARY_DIR})
 set(HEADER_OUTPUT_PATH ${CMAKE_BINARY_DIR}/include)
 set(ROOT_INCLUDE_DIR ${HEADER_OUTPUT_PATH})
 
@@ -35,12 +35,34 @@ include(MacroEnsureVersion)
 
 #---Enable CTest package -----------------------------------------------------------------------
 #include(CTest)
+if(testing)
+  enable_testing()
+endif()
+
 #---Check if the user wants to build the project in the source directory------------------------
 ROOT_CHECK_OUT_OF_SOURCE_BUILD()
 
 #---Here we look for installed software and switch on and of the different build options--------
 include(SearchInstalledSoftware)
 ROOT_SHOW_OPTIONS()
+
+#---Populate the configure arguments returned by 'root-config --config'-------------------------
+get_cmake_property(variables CACHE_VARIABLES)
+foreach(var ${variables})
+  if((var MATCHES "_(LIBRARIES|LIBRARY|INCLUDE)") AND (NOT "${${var}}" STREQUAL "") AND
+     (NOT "${var}" MATCHES "NOTFOUND"))
+    if (var MATCHES "^QT_")
+      # filter out the very long list of Qt libraries and include dirs
+      if (var MATCHES "(QT_LIBRARY_DIR|QT_QTCORE_INCLUDE_DIR)")
+        set(ROOT_CONFIGARGS "${ROOT_CONFIGARGS}${var}=${${var}} ")
+      endif()
+    else()
+      if ((NOT var MATCHES "_(DOCS|TESTS|INSTALL)") AND (NOT var MATCHES "^_"))
+        set(ROOT_CONFIGARGS "${ROOT_CONFIGARGS}${var}=${${var}} ")
+      endif()
+    endif()
+  endif()
+endforeach()
 
 #---Recurse into the given subdirectories.  This does not actually cause another cmake executable
 #  to run. The same process will walk through the project's entire directory structure.
@@ -70,6 +92,8 @@ endif()
 if(roofit)
   add_subdirectory(roofit)
 endif()
+ROOT_ADD_TEST_SUBDIRECTORY(test)
+ROOT_ADD_TEST_SUBDIRECTORY(tutorials)
 
 include(PostInstalledSoftware)
 
@@ -79,7 +103,7 @@ include(RootConfiguration)
 #---Installation of project-wise artifacts-------------------------------------------------------
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_INSTALL_PREFIX)
   install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
-  install(DIRECTORY README/ DESTINATION ${CMAKE_INSTALL_DOCDIR} PATTERN ".svn" EXCLUDE)
+  install(DIRECTORY README DESTINATION ${CMAKE_INSTALL_DOCDIR} PATTERN ".svn" EXCLUDE)
   install(DIRECTORY etc/ DESTINATION ${CMAKE_INSTALL_SYSCONFDIR} USE_SOURCE_PERMISSIONS
                          PATTERN ".svn" EXCLUDE 
                          REGEX system.rootrc EXCLUDE 
@@ -89,15 +113,17 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_INSTALL_PREFIX)
   install(DIRECTORY macros/ DESTINATION ${CMAKE_INSTALL_MACRODIR} PATTERN ".svn" EXCLUDE)
   install(DIRECTORY man/    DESTINATION ${CMAKE_INSTALL_MANDIR} PATTERN ".svn" EXCLUDE)
   install(DIRECTORY test/      DESTINATION ${CMAKE_INSTALL_TESTDIR} COMPONENT tests PATTERN ".svn" EXCLUDE)
-  install(DIRECTORY tutorials/ DESTINATION ${CMAKE_INSTALL_TUTDIR} COMPONENT tests PATTERN ".svn" EXCLUDE)
+  install(DIRECTORY tutorials/ DESTINATION ${CMAKE_INSTALL_TUTDIR} COMPONENT tutorials PATTERN ".svn" EXCLUDE)
   install(DIRECTORY cmake/modules DESTINATION ${CMAKE_INSTALL_CMAKEDIR} PATTERN ".svn" EXCLUDE)
   install(FILES build/misc/root.m4 DESTINATION ${CMAKE_INSTALL_ACLOCALDIR})
 endif()
 
 #---Configure Testing using CTest----------------------------------------------------------------
 if(testing)
+  if(gnuinstall)
+    message(FATAL_ERROR "You cannot enable to run the tests in the build directory (testing=ON) and at the same time select a GNU style installation (gnuinstall=ON). This is because the code is built with the final installation location (CMAKE_INSTALL_PREFIX) for many ancillary files (tutorials, etc, icons, macros, etc.) and these are not available before installation. Tests can be run against the installation once is completed. See the instructions in the web")
+  endif()
   include(RootCTest)
-  add_subdirectory(test)
 endif()
 
 #---Packaging-------------------------------------------------------------------------------------

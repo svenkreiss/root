@@ -15,6 +15,7 @@ void stressShapes();
 
 int main(int argc, char **argv)
 {
+   gROOT->SetBatch();
    TApplication theApp("App", &argc, argv);
    stressShapes();
    return 0;
@@ -132,7 +133,7 @@ void length()
             step += 1E-3;
          }
          if (istep>10000) break;
-	       len[icrt] += step;
+           len[icrt] += step;
          hist = (TH1F*)(hlist->At(icrt));
          hist->Fill(step);
          // now see if we can make an other step

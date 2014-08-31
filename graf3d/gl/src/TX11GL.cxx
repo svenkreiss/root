@@ -120,6 +120,7 @@ const Int_t dblBuff[] =
       GLX_DOUBLEBUFFER,
       GLX_RGBA,
       GLX_DEPTH_SIZE, 16,
+      GLX_STENCIL_SIZE, 8,
       GLX_RED_SIZE, 1,
       GLX_GREEN_SIZE, 1,
       GLX_BLUE_SIZE, 1,
@@ -464,7 +465,7 @@ void TX11GLManager::ReadGLBuffer(Int_t ctxInd)
          ctx.fPixmapGC = XCreateGC(fPimpl->fDpy, ctx.fX11Pixmap, 0, 0);
       if (ctx.fPixmapGC) {
          // GL buffer read operation gives bottom-up order of pixels, but XImage
-	      // require top-down. So, change RGB lines first.
+         // require top-down. So, change RGB lines first.
          char *dest = ctx.fXImage->data;
          const UChar_t *src = &ctx.fBUBuffer[ctx.fW * 4 * (ctx.fH - 1)];
          for (UInt_t i = 0, e = ctx.fH; i < e; ++i) {

@@ -30,9 +30,9 @@ void testNormCross()
    TMath::NormCross(fv1,fv2,fout);
 
    cout << "NormCross(const " << type << " v1[3],const " 
-	<< type << " v2[3]," << type << " out[3]): out = [" 
-	<< fout[0] << ", " << fout[1] << ", " << fout[2] << "]"
-	<< endl;
+   << type << " v2[3]," << type << " out[3]): out = ["
+   << fout[0] << ", " << fout[1] << ", " << fout[2] << "]"
+   << endl;
 }
 
 
@@ -108,7 +108,7 @@ void testIteratorFunctions()
       cout << ", " << sa[ index[i] ];
    cout << "}" << endl;
 
-   sort(&sa[0], &sa[n]);
+   sort(&sa[0], &sa[0]+n);
    is = BinarySearch(n, &sa[0], (T) 57);
    cout << "BinarySearch(n, a, 57) = " << is << "\n" << endl;
 }

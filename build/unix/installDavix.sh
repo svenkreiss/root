@@ -193,7 +193,7 @@ else
 fi
 
 if test "x$VERS" =  "x" ; then
-   VERS="0.2.8"
+   VERS="0.2.10"
 fi
 echo "Version: $VERS"
 
@@ -209,7 +209,7 @@ if test ! "x$TARBALL" = "x" && test -f $TARBALL ; then
 fi
 if test "x$retrieve" = "xyes" ; then
    if test "x$TARBALL" = "x" ; then
-	  TARBALL="http://grid-deployment.web.cern.ch/grid-deployment/dms/lcgutil/tar/davix/davix-$VERS.tar.gz"
+      TARBALL="http://grid-deployment.web.cern.ch/grid-deployment/dms/lcgutil/tar/davix/davix-$VERS.tar.gz"
       TGTBALL="davix-$VERS.tar.gz"
    else
       TGTBALL=`basename $TARBALL`

@@ -25,7 +25,7 @@
 
 using namespace std;
 
-const bool __DRAW__ = 1;
+bool showGraphics = false;
 
 double gaus2D(double *x, double *p)
 {
@@ -50,7 +50,7 @@ ostream& operator << (ostream& out, ROOT::Fit::BinData& bd)
    const unsigned int npoints( bd.NPoints() );
    for ( unsigned int i = 0; i < npoints; ++i )
    {
-      double value, error;
+      double value = 0, error = 0;
       const double *x = bd.GetPoint(i, value, error);
       for ( unsigned int j = 0; j < ndim; ++j )
       {
@@ -70,7 +70,7 @@ int findBin(ROOT::Fit::BinData& bd, const double *x)
 
    for ( unsigned int i = 0; i < npoints; ++i )
    {
-      double value1, error1;
+      double value1 = 0, error1 = 0;
       const double *x1 = bd.GetPoint(i, value1, error1);
       bool thisIsIt = true;
       for ( unsigned int j = 0; j < ndim; ++j )
@@ -98,12 +98,12 @@ bool operator ==(ROOT::Fit::BinData& bd1, ROOT::Fit::BinData& bd2)
 
    for ( unsigned int i = 0; i < npoints && equals; ++i )
    {
-      double value1, error1;
+      double value1 = 0, error1 = 0;
       const double *x1 = bd1.GetPoint(i, value1, error1);
 
       int bin = findBin(bd2, x1);
 
-      double value2 = 0, error2;
+      double value2 = 0, error2 = 0;
       const double *x2 = bd2.GetPoint(bin, value2, error2);
 
       equals &= ( value1 == value2 );
@@ -204,31 +204,31 @@ void fit3DHist()
    //fitter.Config().MinimizerOptions().SetPrintLevel(3);
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with Original BinData *******" << endl;
+   cout << "\n ******* Fit with Original BinData *******" << endl;
    ROOT::Fit::BinData bdOriginal;
    ROOT::Fit::FillData(bdOriginal, h1, 0);
-   ret = fitter.LikelihoodFit(bdOriginal, if1);
+   ret = fitter.LikelihoodFit(bdOriginal, if1, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with Original BinData with Ceros*******" << endl;
+   cout << "\n ******* Fit with Original BinData with Zeros  (integrate function in bins)*******" << endl;
    ROOT::Fit::DataOptions opt;
    opt.fUseEmpty = true;
    opt.fIntegral = true;
    ROOT::Fit::BinData bdOriginalWithCeros(opt);
    ROOT::Fit::FillData(bdOriginalWithCeros, h1, 0);
-   ret = fitter.LikelihoodFit(bdOriginalWithCeros, if1);
+   ret = fitter.LikelihoodFit(bdOriginalWithCeros, if1, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with BinData and NoCeros *******" << endl;
+   cout << "\n ******* Fit with BinData and NoZeros *******" << endl;
    ROOT::Fit::BinData bdNoCeros;
    d.GetBinDataNoZeros(bdNoCeros);
-   ret = fitter.LikelihoodFit(bdNoCeros, if1);
+   ret = fitter.LikelihoodFit(bdNoCeros, if1, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
@@ -237,10 +237,10 @@ void fit3DHist()
 //    cout << "bdNoCeros:\n" << *bdNoCeros << endl;
 //    cout << "Equals: " << (bdOriginal == *bdNoCeros) << endl;
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with BinData with Ceros *******" << endl;
+   cout << "\n ******* Fit with BinData with Zeros ******* (integrate function in bins)" << endl;
    ROOT::Fit::BinData bdWithCeros(opt);
    d.GetBinDataIntegral(bdWithCeros);
-   ret = fitter.LikelihoodFit(bdWithCeros, if1);
+   ret = fitter.LikelihoodFit(bdWithCeros, if1, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
@@ -251,13 +251,16 @@ void fit3DHist()
 
    /////////////////////////////////////////////////////////////////////////
 
+   if (showGraphics) {
   
-   TCanvas* c = new TCanvas("Histogram 3D");
-   c->Divide(1,2);
-   c->cd(1);
-   h1->Draw("lego");
-   c->cd(2);
-   h2->Draw("lego");
+      TCanvas* c = new TCanvas("Histogram 3D");
+      c->Divide(1,2);
+      c->cd(1);
+      h1->Draw("lego");
+      c->cd(2);
+      h2->Draw("lego");
+      c->Update();
+   }
 }
 
 void fit2DHist()
@@ -317,31 +320,31 @@ void fit2DHist()
    //fitter.Config().MinimizerOptions().SetPrintLevel(3);
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with Original BinData *******" << endl;
+   cout << "\n ******* Fit with Original BinData *******" << endl;
    ROOT::Fit::BinData bdOriginal;
    ROOT::Fit::FillData(bdOriginal, h1, 0);
-   ret = fitter.LikelihoodFit(bdOriginal, if2);
+   ret = fitter.LikelihoodFit(bdOriginal, if2, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with Original BinData with Ceros*******" << endl;
+   cout << "\n ******* Fit with Original BinData with Zeros*******" << endl;
    ROOT::Fit::DataOptions opt;
    opt.fUseEmpty = true;
    opt.fIntegral = true;
    ROOT::Fit::BinData bdOriginalWithCeros(opt);
    ROOT::Fit::FillData(bdOriginalWithCeros, h1, 0);
-   ret = fitter.LikelihoodFit(bdOriginalWithCeros, if2);
+   ret = fitter.LikelihoodFit(bdOriginalWithCeros, if2, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with BinData and NoCeros *******" << endl;
+   cout << "\n ******* Fit with BinData and NoZeros *******" << endl;
    ROOT::Fit::BinData bdNoCeros;
    d.GetBinDataNoZeros(bdNoCeros);
-   ret = fitter.LikelihoodFit(bdNoCeros, if2);
+   ret = fitter.LikelihoodFit(bdNoCeros, if2, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
@@ -350,10 +353,10 @@ void fit2DHist()
 //    cout << "bdNoCeros:\n" << *bdNoCeros << endl;
 //    cout << "Equals: " << (bdOriginal == *bdNoCeros) << endl;
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Chi2Fit with BinData with Ceros *******" << endl;
+   cout << "\n ******* Fit with BinData with Zeros *******" << endl;
    ROOT::Fit::BinData bdWithCeros(opt);
    d.GetBinDataIntegral(bdWithCeros);
-   ret = fitter.LikelihoodFit(bdWithCeros, if2);
+   ret = fitter.LikelihoodFit(bdWithCeros, if2, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
@@ -364,17 +367,19 @@ void fit2DHist()
 
    /////////////////////////////////////////////////////////////////////////
 
-  
-   TCanvas* c = new TCanvas("Histogram 2D");
-   c->Divide(2,2);
-   c->cd(1);
-   h1->Draw("colz");
-   c->cd(2);
-   h1->Draw("text");
-   c->cd(3);
-   h2->Draw("colz");
-   c->cd(4);
-   h2->Draw("text");
+   if (showGraphics)  { 
+      TCanvas* c = new TCanvas("Histogram 2D");
+      c->Divide(2,2);
+      c->cd(1);
+      h1->Draw("colz");
+      c->cd(2);
+      h1->Draw("text");
+      c->cd(3);
+      h2->Draw("colz");
+      c->cd(4);
+      h2->Draw("text");
+      c->Update();
+   }
 }
 
 // void fit1DHist()
@@ -451,16 +456,42 @@ void fit2DHist()
 
    int main(int argc, char** argv)
 {
+
+  bool do3dfit = false;
+  // Parse command line arguments 
+  for (Int_t i=1 ;  i<argc ; i++) {
+     std::string arg = argv[i] ;
+     if (arg == "-g") { 
+      showGraphics = true;
+     }
+     if (arg == "-v") { 
+      showGraphics = true;
+      //verbose = true;
+     }
+     if (arg == "-3d") { 
+      do3dfit = true;
+     }
+     if (arg == "-h") { 
+        cerr << "Usage: " << argv[0] << " [-g] [-v]\n";
+        cerr << "  where:\n";
+        cerr << "     -g  :  graphics mode\n";
+        cerr << "     -v  :  verbose  mode\n";
+        cerr << "     -3d :  3d fit";
+        cerr << endl;
+        return -1; 
+     }
+   }
+
    TApplication* theApp = 0;
 
-   if ( __DRAW__ )
+   if ( showGraphics )
       theApp = new TApplication("App",&argc,argv);
    
-   fit3DHist();
-//    fit2DHist();
-//    fit1DHist();
+   fit2DHist();
+   if (do3dfit) fit3DHist();
+// //    fit1DHist();
   
-   if ( __DRAW__ ) {
+   if ( showGraphics ) {
       theApp->Run();
       delete theApp;
       theApp = 0;

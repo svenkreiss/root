@@ -11,17 +11,17 @@
  *
  * @author Manuel Schiller
  * @date Aug 29 2008
- * 	initial release inside LHCb
+ *    initial release inside LHCb
  * @date May 7 2009
- *	factored code to provide a nice Cholesky decomposition class, along
- *	with separate methods for solving a single linear system and to
- *	obtain the inverse matrix from the decomposition
+ * factored code to provide a nice Cholesky decomposition class, along
+ * with separate methods for solving a single linear system and to
+ * obtain the inverse matrix from the decomposition
  * @date July 15th 2013
- * 	provide a version of that class which works if the dimension of the
- * 	problem is only known at run time
+ *    provide a version of that class which works if the dimension of the
+ *    problem is only known at run time
  * @date September 30th 2013
- * 	provide routines to access the result of the decomposition L and its
- * 	inverse
+ *    provide routines to access the result of the decomposition L and its
+ *    inverse
  */
 
 #include <cmath>
@@ -180,21 +180,21 @@ public:
     */
    template<class M> bool getL(M& m) const
    {
-       if (!fOk) return false;
-       for (unsigned i = 0; i < N; ++i) {
-	   // zero upper half of matrix
-	   for (unsigned j = i + 1; j < N; ++j)
-	       m(i, j) = F(0);
-	   // copy the rest
-	   for (unsigned j = 0; j <= i; ++j)
-	       m(i, j) = fL[i * (i + 1) / 2 + j];
-	   // adjust the diagonal - we save 1/L(i, i) in that position, so
-	   // convert to what caller expects
-	   m(i, i) = F(1) / m(i, i);
-       }
-       return true;
+      if (!fOk) return false;
+      for (unsigned i = 0; i < N; ++i) {
+         // zero upper half of matrix
+         for (unsigned j = i + 1; j < N; ++j)
+         m(i, j) = F(0);
+         // copy the rest
+         for (unsigned j = 0; j <= i; ++j)
+         m(i, j) = fL[i * (i + 1) / 2 + j];
+         // adjust the diagonal - we save 1/L(i, i) in that position, so
+         // convert to what caller expects
+         m(i, i) = F(1) / m(i, i);
+      }
+      return true;
    }
-
+   
    /** @brief obtain the decomposed matrix L
     *
     * @returns if the decomposition was successful
@@ -205,15 +205,15 @@ public:
     */
    template<typename G> bool getL(G* m) const
    {
-       if (!fOk) return false;
-       // copy L
-       for (unsigned i = 0; i < (N * (N + 1)) / 2; ++i)
-	   m[i] = fL[i];
-       // adjust diagonal - we save 1/L(i, i) in that position, so convert to
-       // what caller expects
-       for (unsigned i = 0; i < N; ++i)
-	   m[(i * (i + 1)) / 2 + i] = F(1) / fL[(i * (i + 1)) / 2 + i];
-       return true;
+      if (!fOk) return false;
+      // copy L
+      for (unsigned i = 0; i < (N * (N + 1)) / 2; ++i)
+         m[i] = fL[i];
+      // adjust diagonal - we save 1/L(i, i) in that position, so convert to
+      // what caller expects
+      for (unsigned i = 0; i < N; ++i)
+         m[(i * (i + 1)) / 2 + i] = F(1) / fL[(i * (i + 1)) / 2 + i];
+      return true;
    }
 
    /** @brief obtain the inverse of the decomposed matrix L
@@ -224,25 +224,25 @@ public:
     */
    template<class M> bool getLi(M& m) const
    {
-       if (!fOk) return false;
-       for (unsigned i = 0; i < N; ++i) {
-	   // zero lower half of matrix
-	   for (unsigned j = i + 1; j < N; ++j)
-	       m(j, i) = F(0);
-	   // copy the rest
-	   for (unsigned j = 0; j <= i; ++j)
-	       m(j, i) = fL[i * (i + 1) / 2 + j];
-       }
-       // invert the off-diagonal part of what we just copied
-       for (unsigned i = 1; i < N; ++i) {
-	   for (unsigned j = 0; j < i; ++j) {
-	       typename M::value_type tmp = F(0);
-	       for (unsigned k = i; k-- > j;)
-		   tmp -= m(k, i) * m(j, k);
-	       m(j, i) = tmp * m(i, i);
-	   }
-       }
-       return true;
+      if (!fOk) return false;
+      for (unsigned i = 0; i < N; ++i) {
+         // zero lower half of matrix
+         for (unsigned j = i + 1; j < N; ++j)
+            m(j, i) = F(0);
+         // copy the rest
+         for (unsigned j = 0; j <= i; ++j)
+         m(j, i) = fL[i * (i + 1) / 2 + j];
+      }
+      // invert the off-diagonal part of what we just copied
+      for (unsigned i = 1; i < N; ++i) {
+         for (unsigned j = 0; j < i; ++j) {
+            typename M::value_type tmp = F(0);
+            for (unsigned k = i; k-- > j;)
+               tmp -= m(k, i) * m(j, k);
+            m(j, i) = tmp * m(i, i);
+         }
+      }
+      return true;
    }
 
    /** @brief obtain the inverse of the decomposed matrix L
@@ -255,22 +255,22 @@ public:
     */
    template<typename G> bool getLi(G* m) const
    {
-       if (!fOk) return false;
-       // copy L
-       for (unsigned i = 0; i < (N * (N + 1)) / 2; ++i)
-	   m[i] = fL[i];
-       // invert the off-diagonal part of what we just copied
-       G* base1 = &m[1];
-       for (unsigned i = 1; i < N; base1 += ++i) {
-	   for (unsigned j = 0; j < i; ++j) {
-	       G tmp = F(0);
-	       const G *base2 = &m[(i * (i - 1)) / 2];
-	       for (unsigned k = i; k-- > j; base2 -= k)
-		   tmp -= base1[k] * base2[j];
-	       base1[j] = tmp * base1[i];
-	   }
-       }
-       return true;
+      if (!fOk) return false;
+      // copy L
+      for (unsigned i = 0; i < (N * (N + 1)) / 2; ++i)
+         m[i] = fL[i];
+      // invert the off-diagonal part of what we just copied
+      G* base1 = &m[1];
+      for (unsigned i = 1; i < N; base1 += ++i) {
+         for (unsigned j = 0; j < i; ++j) {
+            G tmp = F(0);
+            const G *base2 = &m[(i * (i - 1)) / 2];
+            for (unsigned k = i; k-- > j; base2 -= k)
+            tmp -= base1[k] * base2[j];
+            base1[j] = tmp * base1[i];
+         }
+      }
+      return true;
    }
 };
 
@@ -418,19 +418,19 @@ public:
     */
    template<class M> bool getL(M& m) const
    {
-       if (!fOk) return false;
-       for (unsigned i = 0; i < fN; ++i) {
-	   // zero upper half of matrix
-	   for (unsigned j = i + 1; j < fN; ++j)
-	       m(i, j) = F(0);
-	   // copy the rest
-	   for (unsigned j = 0; j <= i; ++j)
-	       m(i, j) = fL[i * (i + 1) / 2 + j];
-	   // adjust the diagonal - we save 1/L(i, i) in that position, so
-	   // convert to what caller expects
-	   m(i, i) = F(1) / m(i, i);
-       }
-       return true;
+      if (!fOk) return false;
+      for (unsigned i = 0; i < fN; ++i) {
+         // zero upper half of matrix
+         for (unsigned j = i + 1; j < fN; ++j)
+            m(i, j) = F(0);
+         // copy the rest
+         for (unsigned j = 0; j <= i; ++j)
+            m(i, j) = fL[i * (i + 1) / 2 + j];
+         // adjust the diagonal - we save 1/L(i, i) in that position, so
+         // convert to what caller expects
+         m(i, i) = F(1) / m(i, i);
+      }
+      return true;
    }
 
    /** @brief obtain the decomposed matrix L
@@ -446,11 +446,11 @@ public:
        if (!fOk) return false;
        // copy L
        for (unsigned i = 0; i < (fN * (fN + 1)) / 2; ++i)
-	   m[i] = fL[i];
+          m[i] = fL[i];
        // adjust diagonal - we save 1/L(i, i) in that position, so convert to
        // what caller expects
        for (unsigned i = 0; i < fN; ++i)
-	   m[(i * (i + 1)) / 2 + i] = F(1) / fL[(i * (i + 1)) / 2 + i];
+          m[(i * (i + 1)) / 2 + i] = F(1) / fL[(i * (i + 1)) / 2 + i];
        return true;
    }
 
@@ -462,25 +462,25 @@ public:
     */
    template<class M> bool getLi(M& m) const
    {
-       if (!fOk) return false;
-       for (unsigned i = 0; i < fN; ++i) {
-	   // zero lower half of matrix
-	   for (unsigned j = i + 1; j < fN; ++j)
-	       m(j, i) = F(0);
-	   // copy the rest
-	   for (unsigned j = 0; j <= i; ++j)
-	       m(j, i) = fL[i * (i + 1) / 2 + j];
-       }
-       // invert the off-diagonal part of what we just copied
-       for (unsigned i = 1; i < fN; ++i) {
-	   for (unsigned j = 0; j < i; ++j) {
-	       typename M::value_type tmp = F(0);
-	       for (unsigned k = i; k-- > j;)
-		   tmp -= m(k, i) * m(j, k);
-	       m(j, i) = tmp * m(i, i);
-	   }
-       }
-       return true;
+      if (!fOk) return false;
+      for (unsigned i = 0; i < fN; ++i) {
+         // zero lower half of matrix
+         for (unsigned j = i + 1; j < fN; ++j)
+            m(j, i) = F(0);
+         // copy the rest
+         for (unsigned j = 0; j <= i; ++j)
+            m(j, i) = fL[i * (i + 1) / 2 + j];
+      }
+      // invert the off-diagonal part of what we just copied
+      for (unsigned i = 1; i < fN; ++i) {
+         for (unsigned j = 0; j < i; ++j) {
+            typename M::value_type tmp = F(0);
+            for (unsigned k = i; k-- > j;)
+               tmp -= m(k, i) * m(j, k);
+            m(j, i) = tmp * m(i, i);
+         }
+      }
+      return true;
    }
 
    /** @brief obtain the inverse of the decomposed matrix L
@@ -494,21 +494,21 @@ public:
    template<typename G> bool getLi(G* m) const
    {
        if (!fOk) return false;
-       // copy L
-       for (unsigned i = 0; i < (fN * (fN + 1)) / 2; ++i)
-	   m[i] = fL[i];
-       // invert the off-diagonal part of what we just copied
-       G* base1 = &m[1];
-       for (unsigned i = 1; i < fN; base1 += ++i) {
-	   for (unsigned j = 0; j < i; ++j) {
-	       G tmp = F(0);
-	       const G *base2 = &m[(i * (i - 1)) / 2];
-	       for (unsigned k = i; k-- > j; base2 -= k)
-		   tmp -= base1[k] * base2[j];
-	       base1[j] = tmp * base1[i];
-	   }
-       }
-       return true;
+      // copy L
+      for (unsigned i = 0; i < (fN * (fN + 1)) / 2; ++i)
+         m[i] = fL[i];
+      // invert the off-diagonal part of what we just copied
+      G* base1 = &m[1];
+      for (unsigned i = 1; i < fN; base1 += ++i) {
+         for (unsigned j = 0; j < i; ++j) {
+            G tmp = F(0);
+            const G *base2 = &m[(i * (i - 1)) / 2];
+            for (unsigned k = i; k-- > j; base2 -= k)
+              tmp -= base1[k] * base2[j];
+            base1[j] = tmp * base1[i];
+         }
+      }
+      return true;
    }
 };
 
@@ -549,7 +549,7 @@ namespace CholeskyDecompHelpers {
          // cache starting address of rows of L for speed reasons
          F *base1 = &dst[0];
          for (unsigned i = 0; i < N; base1 += ++i) {
-            F tmpdiag = F(0);	// for element on diagonale
+            F tmpdiag = F(0.0); // for element on diagonale
             // calculate off-diagonal elements
             F *base2 = &dst[0];
             for (unsigned j = 0; j < i; base2 += ++j) {
@@ -563,8 +563,8 @@ namespace CholeskyDecompHelpers {
             // keep truncation error small
             tmpdiag = src(i, i) - tmpdiag;
             // check if positive definite
-            if (tmpdiag <= F(0)) return false;
-            else base1[i] = std::sqrt(F(1) / tmpdiag);
+            if (tmpdiag <= F(0.0)) return false;
+            else base1[i] = std::sqrt(F(1.0) / tmpdiag);
          }
          return true;
       }
@@ -592,7 +592,7 @@ namespace CholeskyDecompHelpers {
          F* base1 = &l[1];
          for (unsigned i = 1; i < N; base1 += ++i) {
             for (unsigned j = 0; j < i; ++j) {
-               F tmp = F(0);
+               F tmp = F(0.0);
                const F *base2 = &l[(i * (i - 1)) / 2];
                for (unsigned k = i; k-- > j; base2 -= k)
                   tmp -= base1[k] * base2[j];
@@ -603,7 +603,7 @@ namespace CholeskyDecompHelpers {
          // Li = L^(-1) formed, now calculate M^(-1) = Li^T Li
          for (unsigned i = N; i--; ) {
             for (unsigned j = i + 1; j--; ) {
-               F tmp = F(0);
+               F tmp = F(0.0);
                base1 = &l[(N * (N - 1)) / 2];
                for (unsigned k = N; k-- > i; base1 -= k)
                   tmp += base1[i] * base1[j];
@@ -631,7 +631,7 @@ namespace CholeskyDecompHelpers {
          // solve Ly = rhs
          for (unsigned k = 0; k < N; ++k) {
             const unsigned base = (k * (k + 1)) / 2;
-            F sum = F(0);
+            F sum = F(0.0);
             for (unsigned i = k; i--; )
                sum += rhs[i] * l[base + i];
             // elements on diagonale are pre-inverted!
@@ -639,7 +639,7 @@ namespace CholeskyDecompHelpers {
          }
          // solve L^Tx = y
          for (unsigned k = N; k--; ) {
-            F sum = F(0);
+            F sum = F(0.0);
             for (unsigned i = N; --i > k; )
                sum += rhs[i] * l[(i * (i + 1)) / 2 + k];
             // elements on diagonale are pre-inverted!
@@ -662,38 +662,38 @@ namespace CholeskyDecompHelpers {
       /// method to do the decomposition
       bool operator()(F* dst, const M& src) const
       {
-         if (src(0,0) <= F(0)) return false;
-         dst[0] = std::sqrt(F(1) / src(0,0));
+         if (src(0,0) <= F(0.0)) return false;
+         dst[0] = std::sqrt(F(1.0) / src(0,0));
          dst[1] = src(1,0) * dst[0];
          dst[2] = src(1,1) - dst[1] * dst[1];
-         if (dst[2] <= F(0)) return false;
-         else dst[2] = std::sqrt(F(1) / dst[2]);
+         if (dst[2] <= F(0.0)) return false;
+         else dst[2] = std::sqrt(F(1.0) / dst[2]);
          dst[3] = src(2,0) * dst[0];
          dst[4] = (src(2,1) - dst[1] * dst[3]) * dst[2];
          dst[5] = src(2,2) - (dst[3] * dst[3] + dst[4] * dst[4]);
-         if (dst[5] <= F(0)) return false;
-         else dst[5] = std::sqrt(F(1) / dst[5]);
+         if (dst[5] <= F(0.0)) return false;
+         else dst[5] = std::sqrt(F(1.0) / dst[5]);
          dst[6] = src(3,0) * dst[0];
          dst[7] = (src(3,1) - dst[1] * dst[6]) * dst[2];
          dst[8] = (src(3,2) - dst[3] * dst[6] - dst[4] * dst[7]) * dst[5];
          dst[9] = src(3,3) - (dst[6] * dst[6] + dst[7] * dst[7] + dst[8] * dst[8]);
-         if (dst[9] <= F(0)) return false;
-         else dst[9] = std::sqrt(F(1) / dst[9]);
+         if (dst[9] <= F(0.0)) return false;
+         else dst[9] = std::sqrt(F(1.0) / dst[9]);
          dst[10] = src(4,0) * dst[0];
          dst[11] = (src(4,1) - dst[1] * dst[10]) * dst[2];
          dst[12] = (src(4,2) - dst[3] * dst[10] - dst[4] * dst[11]) * dst[5];
          dst[13] = (src(4,3) - dst[6] * dst[10] - dst[7] * dst[11] - dst[8] * dst[12]) * dst[9];
          dst[14] = src(4,4) - (dst[10]*dst[10]+dst[11]*dst[11]+dst[12]*dst[12]+dst[13]*dst[13]);
-         if (dst[14] <= F(0)) return false;
-         else dst[14] = std::sqrt(F(1) / dst[14]);
+         if (dst[14] <= F(0.0)) return false;
+         else dst[14] = std::sqrt(F(1.0) / dst[14]);
          dst[15] = src(5,0) * dst[0];
          dst[16] = (src(5,1) - dst[1] * dst[15]) * dst[2];
          dst[17] = (src(5,2) - dst[3] * dst[15] - dst[4] * dst[16]) * dst[5];
          dst[18] = (src(5,3) - dst[6] * dst[15] - dst[7] * dst[16] - dst[8] * dst[17]) * dst[9];
          dst[19] = (src(5,4) - dst[10] * dst[15] - dst[11] * dst[16] - dst[12] * dst[17] - dst[13] * dst[18]) * dst[14];
          dst[20] = src(5,5) - (dst[15]*dst[15]+dst[16]*dst[16]+dst[17]*dst[17]+dst[18]*dst[18]+dst[19]*dst[19]);
-         if (dst[20] <= F(0)) return false;
-         else dst[20] = std::sqrt(F(1) / dst[20]);
+         if (dst[20] <= F(0.0)) return false;
+         else dst[20] = std::sqrt(F(1.0) / dst[20]);
          return true;
       }
    };
@@ -703,30 +703,30 @@ namespace CholeskyDecompHelpers {
       /// method to do the decomposition
       bool operator()(F* dst, const M& src) const
       {
-         if (src(0,0) <= F(0)) return false;
-         dst[0] = std::sqrt(F(1) / src(0,0));
+         if (src(0,0) <= F(0.0)) return false;
+         dst[0] = std::sqrt(F(1.0) / src(0,0));
          dst[1] = src(1,0) * dst[0];
          dst[2] = src(1,1) - dst[1] * dst[1];
-         if (dst[2] <= F(0)) return false;
-         else dst[2] = std::sqrt(F(1) / dst[2]);
+         if (dst[2] <= F(0.0)) return false;
+         else dst[2] = std::sqrt(F(1.0) / dst[2]);
          dst[3] = src(2,0) * dst[0];
          dst[4] = (src(2,1) - dst[1] * dst[3]) * dst[2];
          dst[5] = src(2,2) - (dst[3] * dst[3] + dst[4] * dst[4]);
-         if (dst[5] <= F(0)) return false;
-         else dst[5] = std::sqrt(F(1) / dst[5]);
+         if (dst[5] <= F(0.0)) return false;
+         else dst[5] = std::sqrt(F(1.0) / dst[5]);
          dst[6] = src(3,0) * dst[0];
          dst[7] = (src(3,1) - dst[1] * dst[6]) * dst[2];
          dst[8] = (src(3,2) - dst[3] * dst[6] - dst[4] * dst[7]) * dst[5];
          dst[9] = src(3,3) - (dst[6] * dst[6] + dst[7] * dst[7] + dst[8] * dst[8]);
-         if (dst[9] <= F(0)) return false;
-         else dst[9] = std::sqrt(F(1) / dst[9]);
+         if (dst[9] <= F(0.0)) return false;
+         else dst[9] = std::sqrt(F(1.0) / dst[9]);
          dst[10] = src(4,0) * dst[0];
          dst[11] = (src(4,1) - dst[1] * dst[10]) * dst[2];
          dst[12] = (src(4,2) - dst[3] * dst[10] - dst[4] * dst[11]) * dst[5];
          dst[13] = (src(4,3) - dst[6] * dst[10] - dst[7] * dst[11] - dst[8] * dst[12]) * dst[9];
          dst[14] = src(4,4) - (dst[10]*dst[10]+dst[11]*dst[11]+dst[12]*dst[12]+dst[13]*dst[13]);
-         if (dst[14] <= F(0)) return false;
-         else dst[14] = std::sqrt(F(1) / dst[14]);
+         if (dst[14] <= F(0.0)) return false;
+         else dst[14] = std::sqrt(F(1.0) / dst[14]);
          return true;
       }
    };
@@ -736,23 +736,23 @@ namespace CholeskyDecompHelpers {
       /// method to do the decomposition
       bool operator()(F* dst, const M& src) const
       {
-         if (src(0,0) <= F(0)) return false;
-         dst[0] = std::sqrt(F(1) / src(0,0));
+         if (src(0,0) <= F(0.0)) return false;
+         dst[0] = std::sqrt(F(1.0) / src(0,0));
          dst[1] = src(1,0) * dst[0];
          dst[2] = src(1,1) - dst[1] * dst[1];
-         if (dst[2] <= F(0)) return false;
-         else dst[2] = std::sqrt(F(1) / dst[2]);
+         if (dst[2] <= F(0.0)) return false;
+         else dst[2] = std::sqrt(F(1.0) / dst[2]);
          dst[3] = src(2,0) * dst[0];
          dst[4] = (src(2,1) - dst[1] * dst[3]) * dst[2];
          dst[5] = src(2,2) - (dst[3] * dst[3] + dst[4] * dst[4]);
-         if (dst[5] <= F(0)) return false;
-         else dst[5] = std::sqrt(F(1) / dst[5]);
+         if (dst[5] <= F(0.0)) return false;
+         else dst[5] = std::sqrt(F(1.0) / dst[5]);
          dst[6] = src(3,0) * dst[0];
          dst[7] = (src(3,1) - dst[1] * dst[6]) * dst[2];
          dst[8] = (src(3,2) - dst[3] * dst[6] - dst[4] * dst[7]) * dst[5];
          dst[9] = src(3,3) - (dst[6] * dst[6] + dst[7] * dst[7] + dst[8] * dst[8]);
-         if (dst[9] <= F(0)) return false;
-         else dst[9] = std::sqrt(F(1) / dst[9]);
+         if (dst[9] <= F(0.0)) return false;
+         else dst[9] = std::sqrt(F(1.0) / dst[9]);
          return true;
       }
    };
@@ -762,17 +762,17 @@ namespace CholeskyDecompHelpers {
       /// method to do the decomposition
       bool operator()(F* dst, const M& src) const
       {
-         if (src(0,0) <= F(0)) return false;
-         dst[0] = std::sqrt(F(1) / src(0,0));
+         if (src(0,0) <= F(0.0)) return false;
+         dst[0] = std::sqrt(F(1.0) / src(0,0));
          dst[1] = src(1,0) * dst[0];
          dst[2] = src(1,1) - dst[1] * dst[1];
-         if (dst[2] <= F(0)) return false;
-         else dst[2] = std::sqrt(F(1) / dst[2]);
+         if (dst[2] <= F(0.0)) return false;
+         else dst[2] = std::sqrt(F(1.0) / dst[2]);
          dst[3] = src(2,0) * dst[0];
          dst[4] = (src(2,1) - dst[1] * dst[3]) * dst[2];
          dst[5] = src(2,2) - (dst[3] * dst[3] + dst[4] * dst[4]);
-         if (dst[5] <= F(0)) return false;
-         else dst[5] = std::sqrt(F(1) / dst[5]);
+         if (dst[5] <= F(0.0)) return false;
+         else dst[5] = std::sqrt(F(1.0) / dst[5]);
          return true;
       }
    };
@@ -782,12 +782,12 @@ namespace CholeskyDecompHelpers {
       /// method to do the decomposition
       bool operator()(F* dst, const M& src) const
       {
-         if (src(0,0) <= F(0)) return false;
-         dst[0] = std::sqrt(F(1) / src(0,0));
+         if (src(0,0) <= F(0.0)) return false;
+         dst[0] = std::sqrt(F(1.0) / src(0,0));
          dst[1] = src(1,0) * dst[0];
          dst[2] = src(1,1) - dst[1] * dst[1];
-         if (dst[2] <= F(0)) return false;
-         else dst[2] = std::sqrt(F(1) / dst[2]);
+         if (dst[2] <= F(0.0)) return false;
+         else dst[2] = std::sqrt(F(1.0) / dst[2]);
          return true;
       }
    };
@@ -797,8 +797,8 @@ namespace CholeskyDecompHelpers {
       /// method to do the decomposition
       bool operator()(F* dst, const M& src) const
       {
-         if (src(0,0) <= F(0)) return false;
-         dst[0] = std::sqrt(F(1) / src(0,0));
+         if (src(0,0) <= F(0.0)) return false;
+         dst[0] = std::sqrt(F(1.0) / src(0,0));
          return true;
       }
    };

@@ -235,6 +235,7 @@ Double_t RooHistPdf::evaluate() const
   }
 
   Double_t ret =  _dataHist->weight(_histObsList,_intOrder,_unitNorm?kFALSE:kTRUE,_cdfBoundaries) ;  
+  //cout << "RooHistPdf::evaluate(" << GetName() << ") ret = " << ret << endl ;
   if (ret<0) {
     ret=0 ;
   }  
@@ -299,6 +300,7 @@ Int_t RooHistPdf::getAnalyticalIntegral(RooArgSet& allVars, RooArgSet& analVars,
 
   // First make list of pdf observables to histogram observables
   // and select only those for which the integral is over the full range
+
   RooFIter it = _pdfObsList.fwdIterator();
   RooFIter jt = _histObsList.fwdIterator();
   Int_t code = 0, frcode = 0, n = 0;
@@ -320,7 +322,7 @@ Int_t RooHistPdf::getAnalyticalIntegral(RooArgSet& allVars, RooArgSet& analVars,
   // Disable partial analytical integrals if interpolation is used, and we
   // integrate over sub-ranges, but leave them enabled when we integrate over
   // the full range of one or several variables
-  if (_intOrder > 0 && !(code & 1)) {
+  if (_intOrder > 1 && !(code & 1)) {
     analVars.removeAll();
     return 0;
   }
@@ -356,7 +358,7 @@ Double_t RooHistPdf::analyticalIntegral(Int_t code, const char* rangeName) const
       RooAbsRealLValue* rlv = dynamic_cast<RooAbsRealLValue*>(pa);
       if (rlv) {
 	const RooAbsBinning* binning = rlv->getBinningPtr(rangeName);
-	if (rlv->hasRange(rangeName)) {
+	if (rangeName && rlv->hasRange(rangeName)) {
 	  ranges[ha] = std::make_pair(
 	      rlv->getMin(rangeName), rlv->getMax(rangeName));
 	} else if (binning) {
@@ -379,14 +381,14 @@ Double_t RooHistPdf::analyticalIntegral(Int_t code, const char* rangeName) const
   }
 
   Double_t ret = (code & 1) ?
-      _dataHist->sum(intSet,_histObsList,kTRUE,kTRUE) :
-      _dataHist->sum(intSet,_histObsList,kFALSE,kTRUE, ranges);
-
-//    cout << "intSet = " << intSet << endl ;
-//    cout << "slice position = " << endl ;
-//    _histObsList.Print("v") ;
-//    cout << "RooHistPdf::ai(" << GetName() << ") code = " << code << " ret = " << ret << endl ;
-
+    _dataHist->sum(intSet,_histObsList,kTRUE,kTRUE) :
+    _dataHist->sum(intSet,_histObsList,kFALSE,kTRUE, ranges);
+  
+  //    cout << "intSet = " << intSet << endl ;
+  //    cout << "slice position = " << endl ;
+  //    _histObsList.Print("v") ;
+  //    cout << "RooHistPdf::ai(" << GetName() << ") code = " << code << " ret = " << ret << endl ;
+  
   return ret ;
 }
 
@@ -505,6 +507,7 @@ Int_t RooHistPdf::getMaxVal(const RooArgSet& vars) const
 //_____________________________________________________________________________
 Double_t RooHistPdf::maxVal(Int_t code) const 
 {
+  (void)code;
   assert(code==1) ;
 
   Double_t max(-1) ;

@@ -12,7 +12,7 @@ endif()
 
 if(xrootd)
   add_subdirectory(netx)
-  if(NOT WIN32)
+  if(NOT WIN32 AND ssl)
     add_subdirectory(rpdutils)
   endif()
   if(alien)
@@ -34,4 +34,12 @@ endif()
 
 if(davix)
    add_subdirectory(davix)
+endif()
+
+if(netxng)
+   add_subdirectory(netxng)
+endif()
+
+if(http)
+   add_subdirectory(http)
 endif()

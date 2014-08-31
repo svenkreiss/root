@@ -140,15 +140,9 @@ $(CINTDLLDIRL)/G__c_ipc.c:		$(CINTDLLDIRL)/ipc/ipcif.h $(CINTCPPDEP)
 ifneq ($(SOEXT),dll)
 CINTDLLSOEXTCMD = mv $(@:.dll=.$(SOEXT)) $@
 ifeq ($(PLATFORM),macosx)
-ifeq ($(subst $(MACOSX_MINOR),,456789),456789)
-# MACOSX_MINOR < 4
-  CINTDLLSOEXTCMD += ;mv $(@:.dll=.so) $@
-else
   # On macosx one should change the install_name as well.
-  # FIXME: not tested on 10.4, should be the same also there?
   CINTDLLSOEXTCMD += ;install_name_tool -id `otool -D $@ | tail -1 | sed -e's|:$$||;s|[.]so$$|.dll|'` $@
   CINTDLLSOEXTCMD += ;rm -f $(@:.dll=.so)
-endif
 endif # macosx
 endif # need to mv to .dll
 ##### all cintdlls end on .dll - END
@@ -176,8 +170,12 @@ ifneq ($(subst win,,$(ARCH)),$(ARCH))
 	@rm -f $(@:.dll=.lib) $(@:.dll=.exp) # remove import libs
 endif
 
+ifeq ($(GCC_MAJOR),4)
+RemoveLinkerWarning := 2>&1 | grep -v -e 'G__c_stdfunc.o: In function' -e 'warning: .* is dangerous' 
+endif
+
 $(CINTDLLDIRDLLS)/%.dll: $(CINTDLLDIRL)/G__c_%.o
-	@$(MAKELIB) $(PLATFORM) $(LD) "$(LDFLAGS)" "$(SOFLAGS)" $(notdir $(@:.dll=.$(SOEXT))) $(@:.dll=.$(SOEXT)) "$(filter-out $(MAINLIBS),$^)" "$(CINTDLLLIBLINK)"
+	@$(MAKELIB) $(PLATFORM) $(LD) "$(LDFLAGS)" "$(SOFLAGS)" $(notdir $(@:.dll=.$(SOEXT))) $(@:.dll=.$(SOEXT)) "$(filter-out $(MAINLIBS),$^)" "$(CINTDLLLIBLINK)" $(RemoveLinkerWarning)
 	$(CINTDLLSOEXTCMD)
 
 core/metautils/src/stlLoader_%.cc: $(ROOT_SRCDIR)/core/metautils/src/stlLoader.cc

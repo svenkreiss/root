@@ -38,6 +38,8 @@
 #include "TAxis.h"
 #include "TView.h"
 
+#include "TVirtualMutex.h"
+
 class TCanvasInit {
 public:
    TCanvasInit() { TApplication::NeedGraphicsLibs(); }
@@ -650,6 +652,8 @@ void TCanvas::Destructor()
 
    Close();
 
+   //In a batch mode fPainter can be non-null after
+   //the call to Close above (???)
    delete fPainter;
 }
 
@@ -681,10 +685,7 @@ void TCanvas::Clear(Option_t *option)
 
    if (fCanvasID == -1) return;
 
-   if ((!gROOT->IsLineProcessing()) && (!gVirtualX->IsCmdThread())) {
-      gInterpreter->Execute(this, IsA(), "Clear", option);
-      return;
-   }
+   R__LOCKGUARD2(gROOTMutex);
 
    TString opt = option;
    opt.ToLower();
@@ -737,35 +738,36 @@ void TCanvas::Close(Option_t *option)
    TCanvas *cansave = 0;
    if (padsave) cansave = (TCanvas*)gPad->GetCanvas();
 
-   if (fCanvasID == -1) goto deletepad;
+   if (fCanvasID != -1) {
 
-   if ((!gROOT->IsLineProcessing()) && (!gVirtualX->IsCmdThread())) {
-      gInterpreter->Execute(this, IsA(), "Close", option);
-      return;
+      if ((!gROOT->IsLineProcessing()) && (!gVirtualX->IsCmdThread())) {
+         gInterpreter->Execute(this, IsA(), "Close", option);
+         return;
+      }
+
+      R__LOCKGUARD2(gROOTMutex);
+
+      FeedbackMode(kFALSE);
+
+      cd();
+      TPad::Close(option);
+
+      if (!IsBatch()) {
+         gVirtualX->SelectWindow(fCanvasID);    //select current canvas
+
+         DeleteCanvasPainter();
+
+         if (fCanvasImp) fCanvasImp->Close();
+      }
+      fCanvasID = -1;
+      fBatch    = kTRUE;
+
+      gROOT->GetListOfCanvases()->Remove(this);
+
+      // Close actual window on screen
+      SafeDelete(fCanvasImp);
    }
 
-   FeedbackMode(kFALSE);
-
-   cd();
-   TPad::Close(option);
-
-   if (!IsBatch()) {
-      gVirtualX->SelectWindow(fCanvasID);    //select current canvas
-
-      if (fGLDevice != -1)
-         gGLManager->DeleteGLContext(fGLDevice);//?
-
-      if (fCanvasImp) fCanvasImp->Close();
-   }
-   fCanvasID = -1;
-   fBatch    = kTRUE;
-
-   gROOT->GetListOfCanvases()->Remove(this);
-
-   // Close actual window on screen
-   SafeDelete(fCanvasImp);
-
-deletepad:
    if (cansave == this) {
       gPad = (TCanvas *) gROOT->GetListOfCanvases()->First();
    } else {
@@ -1098,6 +1100,9 @@ void TCanvas::UseCurrentStyle()
       gInterpreter->Execute(this, IsA(), "UseCurrentStyle", "");
       return;
    }
+
+   R__LOCKGUARD2(gROOTMutex);
+
    TPad::UseCurrentStyle();
 
    if (gStyle->IsReading()) {
@@ -1175,7 +1180,7 @@ void TCanvas::HandleInput(EEventType event, Int_t px, Int_t py)
       // mouse enters canvas
       if (!fDoubleBuffer) FeedbackMode(kTRUE);
       break;
-
+      
    case kMouseLeave:
       // mouse leaves canvas
       {
@@ -1212,6 +1217,8 @@ void TCanvas::HandleInput(EEventType event, Int_t px, Int_t py)
 
       break;
 
+   case kArrowKeyPress:
+   case kArrowKeyRelease:
    case kButton1Motion:
    case kButton1ShiftMotion: //8 == kButton1Motion + shift modifier
       if (fSelected) {
@@ -1539,6 +1546,8 @@ void TCanvas::Resize(Option_t *)
       gInterpreter->Execute(this, IsA(), "Resize", "");
       return;
    }
+
+   R__LOCKGUARD2(gROOTMutex);
 
    TPad *padsav  = (TPad*)gPad;
    cd();
@@ -2100,6 +2109,18 @@ void TCanvas::ToggleToolTips()
    if (fCanvasImp) fCanvasImp->ShowToolTips(showToolTips);
 }
 
+
+//______________________________________________________________________________
+Bool_t TCanvas::SupportAlpha()
+{
+   // Static function returning "true" if transparency is supported.
+   //gPad must exist (otherwise this call has no sense), and
+   //either it's a gl-pad or we are on OS X with --enable-cocoa.
+   return gPad && (gVirtualX->InheritsFrom("TGQuartz") ||
+                   gPad->GetGLDevice() != -1);
+}
+
+
 //______________________________________________________________________________
 void TCanvas::Update()
 {
@@ -2121,6 +2142,9 @@ void TCanvas::Update()
       gInterpreter->Execute(this, IsA(), "Update", "");
       return;
    }
+
+   R__LOCKGUARD2(gROOTMutex);
+
    fUpdating = kTRUE;
 
    if (!IsBatch()) FeedbackMode(kFALSE);      // Goto double buffer mode
@@ -2192,4 +2216,26 @@ TVirtualPadPainter *TCanvas::GetCanvasPainter()
 
    if (!fPainter) CreatePainter();
    return fPainter;
+}
+
+//______________________________________________________________________________
+void TCanvas::DeleteCanvasPainter()
+{
+   //assert on IsBatch() == false?
+   
+   if (fGLDevice != -1) {
+      //fPainter has a font manager.
+      //Font manager will delete textures.
+      //If context is wrong (we can have several canvases) -
+      //wrong texture will be deleted, damaging some of our fonts.
+      gGLManager->MakeCurrent(fGLDevice);
+   }
+   
+   delete fPainter;
+   fPainter = 0;
+   
+   if (fGLDevice != -1) {
+      gGLManager->DeleteGLContext(fGLDevice);//?
+      fGLDevice = -1;
+   }
 }

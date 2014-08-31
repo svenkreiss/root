@@ -23,7 +23,11 @@ if(WIN32)
 elseif(cocoa)
   set(gllibs "-framework OpenGL")
 else()
-  set(gllibs ${OPENGL_LIBRARIES})
+  set(gllibs ${OPENGL_LIBRARIES} ${X11_LIBRARIES})
+endif()
+
+if(MACOSX_GLU_DEPRECATED)
+  add_definitions(-Wno-deprecated-declarations)
 endif()
 
 set_source_files_properties(src/TGLFontManager.cxx PROPERTIES COMPILE_FLAGS "${FTGL_CFLAGS}")

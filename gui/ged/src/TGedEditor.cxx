@@ -330,10 +330,12 @@ void TGedEditor::SetCanvas(TCanvas *newcan)
 {
    // Change connection to another canvas.
 
-   if (!newcan || (fCanvas == newcan)) return;
+   if (fCanvas == newcan) return;
 
    DisconnectFromCanvas();
    fCanvas = newcan;
+
+   if (!newcan) return;
 
    SetWindowName(Form("%s_Editor", fCanvas->GetName()));
    fPad = fCanvas->GetSelectedPad();
@@ -639,10 +641,10 @@ void TGedEditor::ConfigureGedFrames(Bool_t objChanged)
    while ((el = (TGFrameElement *) next())) {
       if ((el->fFrame)->InheritsFrom(TGedFrame::Class())) {
          if (objChanged) {
-         el->fFrame->MapSubwindows();
-         ((TGedFrame *)(el->fFrame))->SetModel(fModel);
-         el->fFrame->Layout();
-         el->fFrame->MapWindow();
+            el->fFrame->MapSubwindows();
+            ((TGedFrame *)(el->fFrame))->SetModel(fModel);
+            el->fFrame->Layout();
+            el->fFrame->MapWindow();
          } else {
             ((TGedFrame *)(el->fFrame))->SetModel(fModel);
          }

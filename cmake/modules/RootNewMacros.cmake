@@ -35,7 +35,7 @@ endif()
 
 if(soversion)
   set(ROOT_LIBRARY_PROPERTIES ${ROOT_LIBRARY_PROPERTIES}
-      VERSION ${ROOT_MAJOR_VERSION}.${ROOT_MINOR_VERSION}
+      VERSION ${ROOT_VERSION}
       SOVERSION ${ROOT_MAJOR_VERSION}
       SUFFIX ${libsuffix}
       PREFIX ${libprefix} )
@@ -80,35 +80,37 @@ endif()
 set(CMAKE_VERBOSE_MAKEFILES OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR OFF)
 
-include(CMakeMacroParseArguments)
-
+include(CMakeParseArguments)
 
 #---------------------------------------------------------------------------------------------------
 #---ROOT_GLOB_FILES( <variable> [REALTIVE path] [FILTER regexp] <sources> ...)
 #---------------------------------------------------------------------------------------------------
-macro(ROOT_GLOB_FILES variable filter)
-  PARSE_ARGUMENTS(ARG "RELATIVE" "" ${ARGN})  
+function(ROOT_GLOB_FILES variable)
+  CMAKE_PARSE_ARGUMENTS(ARG "" "RELATIVE;FILTER" "" ${ARGN})
   if(ARG_RELATIVE)
-    file(GLOB sources RELATIVE ${ARG_RELATIVE} ${ARG_DEFAULT_ARGS})
+    file(GLOB _sources RELATIVE ${ARG_RELATIVE} ${ARG_UNPARSED_ARGUMENTS})
   else()
-    file(GLOB sources ${ARG_DEFAULT_ARGS})
+    file(GLOB _sources ${ARG_UNPARSED_ARGUMENTS})
   endif()
-  foreach(s ${sources})
-    if(s MATCHES ${filter})
-      list(REMOVE_ITEM sources ${s})
-    endif()
-  endforeach()
-  set(${variable} ${sources} PARENT_SCOPE)
-endmacro()
+  if(ARG_FILTER)
+    foreach(s ${_sources})
+      if(s MATCHES ${ARG_FILTER})
+        list(REMOVE_ITEM _sources ${s})
+      endif()
+    endforeach()
+  endif()
+  set(${variable} ${_sources} PARENT_SCOPE)
+endfunction()
 
 function(ROOT_GLOB_SOURCES variable)
-  ROOT_GLOB_FILES(${variable} "(^|/)G__" ${ARGN})
+  ROOT_GLOB_FILES(_sources FILTER "(^|/)G__" ${ARGN})
+  set(${variable} ${_sources} PARENT_SCOPE)
 endfunction()
 
 function(ROOT_GLOB_HEADERS variable)
-  ROOT_GLOB_FILES(${variable} "LinkDef" ${ARGN})
+  ROOT_GLOB_FILES(_sources FILTER "LinkDef" ${ARGN})
+  set(${variable} ${_sources} PARENT_SCOPE)
 endfunction()
-
 
 #---------------------------------------------------------------------------------------------------
 #---ROOT_GET_SOURCES( <variable> cwd <sources> ...)
@@ -123,7 +125,9 @@ function(ROOT_GET_SOURCES variable cwd )
     endif()
     if(files) 
       foreach(s ${files})
-        if(fp MATCHES "[*]" AND s MATCHES "(^|/)G__") # Eliminate G__* files only when using wildcards
+        if(fp MATCHES "[*]" AND s MATCHES "(^|/)G__") # Eliminate G__* files
+        elseif(s MATCHES "${cwd}/G__")
+          set(sources ${fp} ${sources})
         else()
           set(sources ${sources} ${s})
         endif()
@@ -143,10 +147,10 @@ endfunction()
 #---REFLEX_GENERATE_DICTIONARY( dictionary headerfiles SELECTION selectionfile OPTIONS opt1 opt2 ...)
 #---------------------------------------------------------------------------------------------------
 macro(REFLEX_GENERATE_DICTIONARY dictionary)  
-  PARSE_ARGUMENTS(ARG "SELECTION;OPTIONS" "" ${ARGN})  
+  CMAKE_PARSE_ARGUMENTS(ARG "" "SELECTION" "OPTIONS" ${ARGN})
   #---Get List of header files---------------
   set(headerfiles)
-  foreach(fp ${ARG_DEFAULT_ARGS})
+  foreach(fp ${ARG_UNPARSED_ARGUMENTS})
     file(GLOB files inc/${fp})
     if(files)
       foreach(f ${files})
@@ -203,10 +207,10 @@ endmacro()
 #---ROOT_GENERATE_DICTIONARY( dictionary headerfiles LINKDEF linkdef OPTIONS opt1 opt2 ...)
 #---------------------------------------------------------------------------------------------------
 function(ROOT_GENERATE_DICTIONARY dictionary)
-  PARSE_ARGUMENTS(ARG "LINKDEF;OPTIONS" "" ${ARGN})
+  CMAKE_PARSE_ARGUMENTS(ARG "" "" "LINKDEF;OPTIONS" ${ARGN})
   #---Get the list of header files-------------------------
   set(headerfiles)
-  foreach(fp ${ARG_DEFAULT_ARGS})
+  foreach(fp ${ARG_UNPARSED_ARGUMENTS})
     file(GLOB files inc/${fp})
     if(files)
       foreach(f ${files})
@@ -233,6 +237,7 @@ function(ROOT_GENERATE_DICTIONARY dictionary)
   foreach( d ${incdirs})    
    set(includedirs ${includedirs} -I${d})
   endforeach()
+  list(REMOVE_DUPLICATES includedirs)
   #---Get the list of definitions---------------------------
   get_directory_property(defs COMPILE_DEFINITIONS)
   foreach( d ${defs})
@@ -264,12 +269,15 @@ endfunction()
 #---ROOT_LINKER_LIBRARY( <name> source1 source2 ...[TYPE STATIC|SHARED] [DLLEXPORT] LIBRARIES lib1 lib2 ... DEPENDENCIES lib3 l1b4)
 #---------------------------------------------------------------------------------------------------
 function(ROOT_LINKER_LIBRARY library)
-  PARSE_ARGUMENTS(ARG "TYPE;LIBRARIES;DEPENDENCIES" "DLLEXPORT;CMAKENOEXPORT" ${ARGN})
-  ROOT_GET_SOURCES(lib_srcs src ${ARG_DEFAULT_ARGS})
+  CMAKE_PARSE_ARGUMENTS(ARG "DLLEXPORT;CMAKENOEXPORT" "TYPE" "LIBRARIES;DEPENDENCIES"  ${ARGN})
+  ROOT_GET_SOURCES(lib_srcs src ${ARG_UNPARSED_ARGUMENTS})
   if(NOT ARG_TYPE)
     set(ARG_TYPE SHARED)
   endif()
-  include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/inc ${CMAKE_BINARY_DIR}/include )
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+  endif()
+  include_directories(${CMAKE_BINARY_DIR}/include)                # This is a copy and certainly should last one
   set(library_name ${library})
   if(TARGET ${library})
     message("Target ${library} already exists. Renaming target name to ${library}_new")
@@ -287,7 +295,7 @@ function(ROOT_LINKER_LIBRARY library)
       #    set(lib_objs ${lib_objs} ${library}.dir/${CMAKE_CFG_INTDIR}/${name}.obj)
       #  endif()
       #endforeach()
-	  set(lib_objs ${lib_objs} ${library}.dir/${CMAKE_CFG_INTDIR}/*.obj)
+     set(lib_objs ${lib_objs} ${library}.dir/${CMAKE_CFG_INTDIR}/*.obj)
     else()
       foreach(src1 ${lib_srcs})
         if(NOT src1 MATCHES "[.]h$|[.]icc$|[.]hxx$|[.]hpp$")
@@ -309,7 +317,7 @@ function(ROOT_LINKER_LIBRARY library)
     #---create a custom pre-link command that runs bindexplib
     add_custom_command(TARGET ${library} PRE_LINK
                        COMMAND bindexplib
-                       ARGS -o ${library}.def ${libprefix}${library} ${lib_objs}
+                       ARGS -o ${library}.def $<TARGET_FILE_NAME:${library}> ${lib_objs}
                        DEPENDS bindexplib )
   else()
     add_library( ${library} ${ARG_TYPE} ${lib_srcs})
@@ -340,16 +348,16 @@ function(ROOT_LINKER_LIBRARY library)
   endif()
   if(WIN32 AND ARG_TYPE STREQUAL SHARED)
     if(CMAKE_GENERATOR MATCHES "Visual Studio")
-      install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Debug/lib${library}.pdb 
+      install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib${library}.pdb
               CONFIGURATIONS Debug
               DESTINATION ${CMAKE_INSTALL_BINDIR}
               COMPONENT libraries) 
-      install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/RelWithDebInfo/lib${library}.pdb 
+      install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib${library}.pdb
               CONFIGURATIONS RelWithDebInfo 
               DESTINATION ${CMAKE_INSTALL_BINDIR}
               COMPONENT libraries) 
     else()
-      install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib${library}.pdb 
+      install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib${library}.pdb
               CONFIGURATIONS Debug RelWithDebInfo 
               DESTINATION ${CMAKE_INSTALL_BINDIR}
               COMPONENT libraries) 
@@ -361,9 +369,12 @@ endfunction()
 #---ROOT_MODULE_LIBRARY( <name> source1 source2 ... [DLLEXPORT] LIBRARIES library1 library2 ...)
 #---------------------------------------------------------------------------------------------------
 function(ROOT_MODULE_LIBRARY library)
-  PARSE_ARGUMENTS(ARG "LIBRARIES" "" ${ARGN})
-  ROOT_GET_SOURCES(lib_srcs src ${ARG_DEFAULT_ARGS})
-  include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/inc ${CMAKE_BINARY_DIR}/include )
+  CMAKE_PARSE_ARGUMENTS(ARG "" "" "LIBRARIES" ${ARGN})
+  ROOT_GET_SOURCES(lib_srcs src ${ARG_UNPARSED_ARGUMENTS})
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+  endif()
+  include_directories(${CMAKE_BINARY_DIR}/include)
   add_library( ${library} SHARED ${lib_srcs})
   set_target_properties(${library}  PROPERTIES ${ROOT_LIBRARY_PROPERTIES})
   target_link_libraries(${library} ${ARG_LIBRARIES})
@@ -380,8 +391,10 @@ endfunction()
 macro( ROOT_USE_PACKAGE package )
   if(IntegratedBuild)
     if( EXISTS ${CMAKE_SOURCE_DIR}/${package}/CMakeLists.txt)
-      set(_use_packages ${_use_packages} ${package}) 
-      include_directories( ${CMAKE_SOURCE_DIR}/${package}/inc ) 
+      set(_use_packages ${_use_packages} ${package})
+      if(EXISTS ${CMAKE_SOURCE_DIR}/${package}/inc )
+        include_directories( ${CMAKE_SOURCE_DIR}/${package}/inc )
+      endif()
       set_property(GLOBAL APPEND PROPERTY ROOT_BUILDTREE_PACKAGES ${package})
       file(READ ${CMAKE_SOURCE_DIR}/${package}/CMakeLists.txt file_contents)
       string( REGEX MATCHALL "ROOT_USE_PACKAGE[ ]*[(][ ]*([^ )])+" vars ${file_contents})
@@ -411,7 +424,7 @@ endmacro()
 #---ROOT_GENERATE_ROOTMAP( library LINKDEF linkdef LIBRRARY lib DEPENDENCIES lib1 lib2 )
 #---------------------------------------------------------------------------------------------------
 function(ROOT_GENERATE_ROOTMAP library)
-  PARSE_ARGUMENTS(ARG "LINKDEF;LIBRARY;DEPENDENCIES" "" ${ARGN})
+  CMAKE_PARSE_ARGUMENTS(ARG "" "LIBRARY" "LINKDEF;DEPENDENCIES" ${ARGN})
   get_filename_component(libname ${library} NAME_WE)
   get_filename_component(path ${library} PATH)
   set(outfile ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${libprefix}${libname}.rootmap)
@@ -468,7 +481,7 @@ endfunction()
 #---ROOT_STANDARD_LIBRARY_PACKAGE(libname DEPENDENCIES lib1 lib2)
 #---------------------------------------------------------------------------------------------------
 function(ROOT_STANDARD_LIBRARY_PACKAGE libname)
-  PARSE_ARGUMENTS(ARG "DEPENDENCIES" "" ${ARGN})
+  CMAKE_PARSE_ARGUMENTS(ARG "" "" "DEPENDENCIES" ${ARGN})
   ROOT_GENERATE_DICTIONARY(G__${libname} *.h LINKDEF LinkDef.h)
   ROOT_GENERATE_ROOTMAP(${libname} LINKDEF LinkDef.h DEPENDENCIES ${ARG_DEPENDENCIES})
   ROOT_LINKER_LIBRARY(${libname} *.cxx G__${libname}.cxx DEPENDENCIES ${ARG_DEPENDENCIES})
@@ -479,14 +492,17 @@ endfunction()
 #---ROOT_EXECUTABLE( <name> source1 source2 ... LIBRARIES library1 library2 ...)
 #---------------------------------------------------------------------------------------------------
 function(ROOT_EXECUTABLE executable)
-  PARSE_ARGUMENTS(ARG "LIBRARIES" "CMAKENOEXPORT;NOINSTALL" ${ARGN})
-  ROOT_GET_SOURCES(exe_srcs src ${ARG_DEFAULT_ARGS})
+  CMAKE_PARSE_ARGUMENTS(ARG "CMAKENOEXPORT;NOINSTALL" "" "LIBRARIES;ADDITIONAL_COMPILE_FLAGS"  ${ARGN})
+  ROOT_GET_SOURCES(exe_srcs src ${ARG_UNPARSED_ARGUMENTS})
   set(executable_name ${executable})
   if(TARGET ${executable})
     message("Target ${executable} already exists. Renaming target name to ${executable}_new")
     set(executable ${executable}_new)
   endif()
-  include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/inc ${CMAKE_BINARY_DIR}/include )
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+  endif()
+  include_directories(${CMAKE_BINARY_DIR}/include)
   add_executable( ${executable} ${exe_srcs})
   target_link_libraries(${executable} ${ARG_LIBRARIES} )
   if(WIN32 AND ${executable} MATCHES .exe)  
@@ -494,6 +510,9 @@ function(ROOT_EXECUTABLE executable)
   endif()
   set_property(GLOBAL APPEND PROPERTY ROOT_EXPORTED_TARGETS ${executable})
   set_target_properties(${executable} PROPERTIES OUTPUT_NAME ${executable_name})
+  if (ARG_ADDITIONAL_COMPILE_FLAGS)
+    set_target_properties(${executable} PROPERTIES COMPILE_FLAGS ${ARG_ADDITIONAL_COMPILE_FLAGS})
+  endif()
   #----Installation details------------------------------------------------------
   if(NOT ARG_NOINSTALL)
     if(ARG_CMAKENOEXPORT)
@@ -508,7 +527,7 @@ endfunction()
 #---REFLEX_BUILD_DICTIONARY( dictionary headerfiles selectionfile OPTIONS opt1 opt2 ...  LIBRARIES lib1 lib2 ... )
 #---------------------------------------------------------------------------------------------------
 function(REFLEX_BUILD_DICTIONARY dictionary headerfiles selectionfile )
-  PARSE_ARGUMENTS(ARG "LIBRARIES;OPTIONS" "" ${ARGN})
+  CMAKE_PARSE_ARGUMENTS(ARG "" "" "LIBRARIES;OPTIONS" ${ARGN})
   REFLEX_GENERATE_DICTIONARY(${dictionary} ${headerfiles} ${selectionfile} OPTIONS ${ARG_OPTIONS})
   add_library(${dictionary}Dict MODULE ${gensrcdict})
   target_link_libraries(${dictionary}Dict ${ARG_LIBRARIES} ${ROOT_Reflex_LIBRARY})
@@ -517,29 +536,6 @@ function(REFLEX_BUILD_DICTIONARY dictionary headerfiles selectionfile )
   set(mergedRootMap ${CMAKE_INSTALL_PREFIX}/${lib}/${CMAKE_PROJECT_NAME}Dict.rootmap)
   set(srcRootMap ${CMAKE_CURRENT_BINARY_DIR}/${rootmapname})
   install(CODE "EXECUTE_PROCESS(COMMAND ${merge_rootmap_cmd} --do-merge --input-file ${srcRootMap} --merged-file ${mergedRootMap})")
-endfunction()
-
-#---------------------------------------------------------------------------------------------------
-#---SET_RUNTIME_PATH( var [LD_LIBRARY_PATH | PATH] )
-#---------------------------------------------------------------------------------------------------
-function( SET_RUNTIME_PATH var pathname)
-  set( dirs ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${CMAKE_CFG_INTDIR})
-  get_property(found_packages GLOBAL PROPERTY PACKAGES_FOUND)
-  get_property(found_projects GLOBAL PROPERTY PROJECTS_FOUND)
-  foreach( package ${found_projects} ${found_packages} )
-     foreach( env ${${package}_environment})
-         if(env MATCHES "^${pathname}[+]=.*")
-            string(REGEX REPLACE "^${pathname}[+]=(.+)" "\\1"  val ${env})
-            set(dirs ${dirs} ${val})
-         endif()
-     endforeach()
-  endforeach()
-  if(WIN32)
-    string(REPLACE ";" "[:]" dirs "${dirs}")
-  else()
-    string(REPLACE ";" ":" dirs "${dirs}")
-  endif()
-  set(${var} "${dirs}" PARENT_SCOPE)
 endfunction()
 
 #---------------------------------------------------------------------------------------------------
@@ -567,11 +563,15 @@ endmacro()
 #                        [SOURCE_DIR dir] [BINARY_DIR dir]
 #                        [WORKING_DIR dir]
 #                        [BUILD target] [PROJECT project]
-#                        [PASSREGEX exp] [FAILREGEX epx])
+#                        [PASSREGEX exp] [FAILREGEX epx]
+#                        [PASSRC code])
 #
 function(ROOT_ADD_TEST test)
-  PARSE_ARGUMENTS(ARG "TIMEOUT;BUILD;OUTPUT;ERROR;SOURCE_DIR;BINARY_DIR;WORKING_DIR;PROJECT;PASSREGEX;FAILREGEX;COMMAND;PRECMD;POSTCMD;ENVIRONMENT;DEPENDS" 
-                      "DEBUG" ${ARGN})
+  CMAKE_PARSE_ARGUMENTS(ARG "DEBUG;WILLFAIL;CHECKOUT;CHECKERR"
+                             "TIMEOUT;BUILD;OUTPUT;ERROR;SOURCE_DIR;BINARY_DIR;WORKING_DIR;PROJECT;PASSRC"
+                             "COMMAND;DIFFCMD;OUTCNV;OUTCNVCMD;PRECMD;POSTCMD;ENVIRONMENT;COMPILEMACROS;DEPENDS;PASSREGEX;CMPOUTPUT;FAILREGEX;LABELS"
+                            ${ARGN})
+
   #- Handle COMMAND argument
   list(LENGTH ARG_COMMAND _len)
   if(_len LESS 1)
@@ -581,28 +581,36 @@ function(ROOT_ADD_TEST test)
   else()
     list(GET ARG_COMMAND 0 _prg)
     list(REMOVE_AT ARG_COMMAND 0)
-    if(TARGET ${_prg})
-	  set(_prg "$<TARGET_FILE:${_prg}>")
-	else()
-      if(NOT IS_ABSOLUTE ${_prg})
-        set(_prg ${CMAKE_CURRENT_BINARY_DIR}/${_prg})		
+
+    if(TARGET ${_prg})                                 # if command is a target, get the actual executable
+      set(_prg "$<TARGET_FILE:${_prg}>")
+      set(_cmd ${_prg} ${ARG_COMMAND})
+    else()
+      find_program(_exe ${_prg})
+      if(_exe)                                         # if the command is found in the system, use it
+        set(_cmd ${_exe} ${ARG_COMMAND})
+      elseif(NOT IS_ABSOLUTE ${_prg})                  # if not absolute, assume is found in current binary dir
+        set(_prg ${CMAKE_CURRENT_BINARY_DIR}/${_prg})
+        set(_cmd ${_prg} ${ARG_COMMAND})
+      else()                                           # take as it is
+        set(_cmd ${_prg} ${ARG_COMMAND})
       endif()
-	endif()
-    set(_cmd ${_prg} ${ARG_COMMAND})
-    string(REPLACE ";" "#" _cmd "${_cmd}")
+      unset(_exe CACHE)
+    endif()
+
+    string(REPLACE ";" "^" _cmd "${_cmd}")
   endif()
 
   set(_command ${CMAKE_COMMAND} -DCMD=${_cmd})
 
   #- Handle PRE and POST commands
   if(ARG_PRECMD)
-    set(_pre ${ARG_PRECMD})
-    string(REPLACE ";" "#" _pre "${_pre}")
+    string(REPLACE ";" "^" _pre "${ARG_PRECMD}")
     set(_command ${_command} -DPRE=${_pre})
   endif()
+
   if(ARG_POSTCMD)
-    set(_post ${ARG_POSTCMD})
-    string(REPLACE ";" "#" _post "${_post}")
+    string(REPLACE ";" "^" _post "${ARG_POSTCMD}")
     set(_command ${_command} -DPOST=${_post})
   endif()
 
@@ -611,17 +619,50 @@ function(ROOT_ADD_TEST test)
     set(_command ${_command} -DOUT=${ARG_OUTPUT})
   endif()
 
+  if(ARG_CMPOUTPUT)
+    set(_command ${_command} -DCMPOUTPUT=${ARG_CMPOUTPUT})
+  endif()
+
   if(ARG_ERROR)
     set(_command ${_command} -DERR=${ARG_ERROR})
   endif()
-  
+
   if(ARG_WORKING_DIR)
-    set(_command ${_command} -DCWD=${ARG_WORKING_DIR})   
+    set(_command ${_command} -DCWD=${ARG_WORKING_DIR})
   endif()
 
   if(ARG_DEBUG)
     set(_command ${_command} -DDBG=ON)
   endif()
+
+  if(ARG_PASSRC)
+    set(_command ${_command} -DRC=${ARG_PASSRC})
+  endif()
+
+  if(ARG_OUTCNVCMD)
+    string(REPLACE ";" "^" _outcnvcmd "${ARG_OUTCNVCMD}")
+    set(_command ${_command} -DCNVCMD=${_outcnvcmd})
+  endif()
+
+  if(ARG_OUTCNV)
+    string(REPLACE ";" "^" _outcnv "${ARG_OUTCNV}")
+    set(_command ${_command} -DCNV=${_outcnv})
+  endif()
+
+  if(ARG_DIFFCMD)
+    string(REPLACE ";" "^" _diff_cmd "${ARG_DIFFCMD}")
+    set(_command ${_command} -DDIFFCMD=${_diff_cmd})
+  endif()
+
+  if(ARG_CHECKOUT)
+    set(_command ${_command} -DCHECKOUT=true)
+  endif()
+
+  if(ARG_CHECKERR)
+    set(_command ${_command} -DCHECKERR=true)
+  endif()
+ 
+  set(_command ${_command} -DSYS=${ROOTSYS})
 
   #- Handle ENVIRONMENT argument
   if(ARG_ENVIRONMENT)
@@ -632,11 +673,14 @@ function(ROOT_ADD_TEST test)
 
   #- Locate the test driver
   find_file(ROOT_TEST_DRIVER RootTestDriver.cmake PATHS ${CMAKE_MODULE_PATH})
-  #set(_driver ${CMAKE_SOURCE_DIR}/cmake/modules/RootTestDriver.cmake)
   if(NOT ROOT_TEST_DRIVER)
     message(FATAL_ERROR "ROOT_ADD_TEST: RootTestDriver.cmake not found!")
   endif()
   set(_command ${_command} -P ${ROOT_TEST_DRIVER})
+
+  if(ARG_WILLFAIL)
+    set(test ${test}_WILL_FAIL)
+  endif()
 
   #- Now we can actually add the test
   if(ARG_BUILD)
@@ -652,7 +696,7 @@ function(ROOT_ADD_TEST test)
        else()
          set(ARG_PROJECT ${ARG_BUILD})
        endif()
-    endif() 
+    endif()
     add_test(NAME ${test} COMMAND ${CMAKE_CTEST_COMMAND}
       --build-and-test  ${ARG_SOURCE_DIR} ${ARG_BINARY_DIR}
       --build-generator ${CMAKE_GENERATOR}
@@ -684,4 +728,33 @@ function(ROOT_ADD_TEST test)
     set_property(TEST ${test} PROPERTY FAIL_REGULAR_EXPRESSION ${ARG_FAILREGEX})
   endif()
 
+  if(ARG_WILLFAIL)
+    set_property(TEST ${test} PROPERTY WILL_FAIL true)
+  endif()
+
+  if(ARG_LABELS)
+    set_tests_properties(${test} PROPERTIES LABELS "${ARG_LABELS}")
+  endif()
+
 endfunction()
+
+#----------------------------------------------------------------------------
+# ROOT_ADD_TEST_SUBDIRECTORY( <name> )
+#----------------------------------------------------------------------------
+function(ROOT_ADD_TEST_SUBDIRECTORY subdir)
+  file(RELATIVE_PATH subdir ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/${subdir})
+  set_property(GLOBAL APPEND PROPERTY ROOT_TEST_SUBDIRS ${subdir})
+endfunction()
+
+#----------------------------------------------------------------------------
+# ROOT_ADD_BUILTIN_DEPENDENCIES(target EXTERNAL)
+#----------------------------------------------------------------------------
+macro(ROOT_ADD_BUILTIN_DEPENDENCIES target EXTERNAL)
+  add_custom_command(OUTPUT ${${EXTERNAL}_LIBRARIES} DEPENDS ${EXTERNAL})
+  if(NOT TARGET ${EXTERNAL}LIBS)
+    add_custom_target(${EXTERNAL}LIBS DEPENDS ${${EXTERNAL}_LIBRARIES})
+  endif()
+  add_dependencies(${target} ${EXTERNAL}LIBS)
+endmacro()
+
+

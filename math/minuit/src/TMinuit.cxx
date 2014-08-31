@@ -850,8 +850,8 @@ Int_t TMinuit::GetNumFreePars() const
 //______________________________________________________________________________
 Int_t TMinuit::GetNumPars() const
 {
-// returns the total number of parameters that have been defined.
-// (fixed and free)
+// returns the total number of parameters that have been defined
+// as fixed or free. The constant parameters are not counted.
 
    return fNpar + fNpfix;
 }
@@ -6216,7 +6216,8 @@ L50:
       cline[nx] = '\0';
       cline[nx+1] = '\0';
       cline[0]        = '.';
-      cline[nx-1]     = '.';
+      // not needed - but to avoid a wrongly reported compiler warning (see ROOT-6496)
+      if (nx>0) cline[nx-1]     = '.';
       cline[nxbest-1] = '.';
       if (i != 1 && i != nybest && i != ny) goto L320;
       for (j = 1; j <= nx; ++j) { cline[j-1] = '.'; }

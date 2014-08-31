@@ -77,6 +77,7 @@ protected :
    TString            fOption;         //! option - if any
    Int_t              fNumber;         //  volume serial number in the list of volumes
    Int_t              fNtotal;         // total number of physical nodes
+   Int_t              fRefCount;       // reference counter
    TGeoExtension     *fUserExtension;  //! Transient user-defined extension to volumes
    TGeoExtension     *fFWExtension;    //! Transient framework-defined extension to volumes
 
@@ -95,10 +96,11 @@ public:
       kVolumeOverlap =     BIT(17),
       kVolumeImportNodes = BIT(18),
       kVolumeMulti   =     BIT(19),
-      kVoxelsXYZ     =     BIT(20),
-      kVoxelsCyl     =     BIT(21),
+      kVoxelsXYZ     =     BIT(20), // not used
+      kVoxelsCyl     =     BIT(21), // not used
       kVolumeClone   =     BIT(22),
-      kVolumeAdded   =     BIT(23)
+      kVolumeAdded   =     BIT(23),
+      kVolumeOC      =     BIT(21)  // overlapping candidates
    };
    // constructors
    TGeoVolume();
@@ -127,9 +129,9 @@ public:
    virtual Bool_t  IsFolder() const;
    Bool_t          IsRunTime() const {return fShape->IsRunTimeShape();}
    virtual Bool_t  IsVolumeMulti() const {return kFALSE;}
-   virtual void    AddNode(const TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat=0, Option_t *option="");       // most general case
-   void            AddNodeOffset(const TGeoVolume *vol, Int_t copy_no, Double_t offset=0, Option_t *option="");
-   virtual void    AddNodeOverlap(const TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat=0, Option_t *option="");
+   virtual void    AddNode(TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat=0, Option_t *option="");       // most general case
+   void            AddNodeOffset(TGeoVolume *vol, Int_t copy_no, Double_t offset=0, Option_t *option="");
+   virtual void    AddNodeOverlap(TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat=0, Option_t *option="");
 
    virtual TGeoVolume *Divide(const char *divname, Int_t iaxis, Int_t ndiv, Double_t start, Double_t step, Int_t numed=0, Option_t *option="");
    virtual Int_t   DistancetoPrimitive(Int_t px, Int_t py);
@@ -139,20 +141,25 @@ public:
                             Int_t nphi=60, Double_t phimin=0., Double_t phimax=360.,
                             Double_t rmin=0., Double_t rmax=9999999, Option_t *option=""); // *MENU*
    virtual void    Paint(Option_t *option="");
+   virtual void    Print(Option_t *option="") const; // *MENU*
    void            PrintNodes() const;
    void            PrintVoxels() const; // *MENU*
    void            ReplayCreation(const TGeoVolume *other);
    void            SetUserExtension(TGeoExtension *ext);
    void            SetFWExtension(TGeoExtension *ext);
+   Int_t           GetRefCount() const      {return fRefCount;}
    TGeoExtension  *GetUserExtension() const {return fUserExtension;}
    TGeoExtension  *GetFWExtension() const   {return fFWExtension;}
    TGeoExtension  *GrabUserExtension() const;
    TGeoExtension  *GrabFWExtension() const;
+   void            Grab()                   {fRefCount++;}
+   void            Release()                {fRefCount--; if (fRefCount==0) delete this;}
    virtual void    ExecuteEvent(Int_t event, Int_t px, Int_t py);
 
    Bool_t          IsActive() const {return TGeoAtt::IsActive();}
    Bool_t          IsActiveDaughters() const {return TGeoAtt::IsActiveDaughters();}
    Bool_t          IsAdded()     const {return TObject::TestBit(kVolumeAdded);}
+   Bool_t          IsOverlappingCandidate() const {return TObject::TestBit(kVolumeOC);}
    Bool_t          IsReplicated() const {return TObject::TestBit(kVolumeReplicated);}
    Bool_t          IsSelected() const  {return TObject::TestBit(kVolumeSelected);}
    Bool_t          IsCylVoxels() const {return TObject::TestBit(kVoxelsCyl);}
@@ -221,6 +228,7 @@ public:
    void            SetCurrentPoint(Double_t x, Double_t y, Double_t z);
    void            SetCylVoxels(Bool_t flag=kTRUE) {TObject::SetBit(kVoxelsCyl, flag); TObject::SetBit(kVoxelsXYZ, !flag);}
    void            SetNodes(TObjArray *nodes) {fNodes = nodes; TObject::SetBit(kVolumeImportNodes);}
+   void            SetOverlappingCandidate(Bool_t flag) {TObject::SetBit(kVolumeOC,flag);}
    void            SetShape(const TGeoShape *shape);
    void            SetTransparency(Char_t transparency=0) {if (fMedium) fMedium->GetMaterial()->SetTransparency(transparency);} // *MENU*
    void            SetField(TObject *field)          {fField = field;}
@@ -248,7 +256,7 @@ public:
    Double_t        Weight(Double_t precision=0.01, Option_t *option="va"); // *MENU*
    Double_t        WeightA() const;
 
-   ClassDef(TGeoVolume, 5)              // geometry volume descriptor
+   ClassDef(TGeoVolume, 6)              // geometry volume descriptor
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -281,8 +289,8 @@ public:
 
    void            AddVolume(TGeoVolume *vol);
    TGeoVolume     *GetVolume(Int_t id) const {return (TGeoVolume*)fVolumes->At(id);}
-   virtual void    AddNode(const TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat, Option_t *option="");       // most general case
-   virtual void    AddNodeOverlap(const TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat, Option_t *option="");
+   virtual void    AddNode(TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat, Option_t *option="");       // most general case
+   virtual void    AddNodeOverlap(TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat, Option_t *option="");
    virtual TGeoVolume *Divide(const char *divname, Int_t iaxis, Int_t ndiv, Double_t start, Double_t step, Int_t numed=0, Option_t *option="");
    TGeoShape      *GetLastShape() const;
    Int_t           GetNvolumes() const {return fVolumes->GetEntriesFast();}
@@ -334,8 +342,8 @@ public:
    TGeoVolumeAssembly(const char *name);
    virtual ~TGeoVolumeAssembly();
 
-   virtual void    AddNode(const TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat=0, Option_t *option=""); 
-   virtual void    AddNodeOverlap(const TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat, Option_t *option);
+   virtual void    AddNode(TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat=0, Option_t *option=""); 
+   virtual void    AddNodeOverlap(TGeoVolume *vol, Int_t copy_no, TGeoMatrix *mat, Option_t *option);
    virtual TGeoVolume *CloneVolume() const;
    virtual TGeoVolume *Divide(const char *divname, Int_t iaxis, Int_t ndiv, Double_t start, Double_t step, Int_t numed=0, Option_t *option="");
    TGeoVolume     *Divide(TGeoVolume *cell, TGeoPatternFinder *pattern, Option_t *option="spacedout");

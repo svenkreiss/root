@@ -51,6 +51,7 @@ class TAliEnFind : public TObject {
       TString      fTreeName;
       TString      fRegexpRaw;
       TString      fAnchor;
+      TString      fQuery;
       Bool_t       fArchSubst;
       TPMERegexp  *fRegexp;
       TString      fSearchId;
@@ -63,7 +64,8 @@ class TAliEnFind : public TObject {
 
       TAliEnFind(const TString &basePath = "", const TString &fileName = "",
          const TString &anchor = "", const Bool_t archSubst = kFALSE,
-         const TString &treeName = "", const TString &regexp = "");
+         const TString &treeName = "", const TString &regexp = "",
+         const TString &query = "");
 
       TAliEnFind(const TAliEnFind &src);
       TAliEnFind &operator=(const TAliEnFind &rhs);
@@ -102,16 +104,24 @@ class TDataSetManagerAliEn : public TDataSetManager {
       TString              fUrlTpl;
       TDataSetManagerFile *fCache;
       Long_t               fCacheExpire_s;
+      Bool_t               fReadFromSE;
+
+      const TUrl          *kfNoopRedirUrl;
+      const TUrl          *kfNoopUnknownUrl;
+      const TUrl          *kfNoopNoneUrl;
 
       static std::vector<Int_t> *ExpandRunSpec(TString &runSpec);
 
       static Bool_t ParseCustomFindUri(TString &uri, TString &basePath,
-         TString &fileName, TString &anchor, TString &treeName,
+         TString &fileName, TString &anchor, TString &query, TString &treeName,
          TString &regexp);
 
       static Bool_t ParseOfficialDataUri(TString &uri, Bool_t sim,
          TString &period, Int_t &year, std::vector<Int_t> *&runList,
          Bool_t &esd, Int_t &aodNum, TString &pass);
+
+      static TUrl *AliEnWhereIs(TUrl *alienUrl, TString &closeSE,
+         Bool_t onlyFromCloseSE);
 
       virtual void Init(TString cacheDir, TString urlTpl,
          ULong_t cacheExpire_s);

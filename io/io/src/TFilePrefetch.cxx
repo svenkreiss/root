@@ -315,7 +315,9 @@ void TFilePrefetch::SetFile(TFile *file)
    // - clear all blocks from prefetching and read list
    // - reset the file pointer
   
-   fSemChangeFile->Wait();
+   if (!fThreadJoined) {
+     fSemChangeFile->Wait();
+   }
 
    if (fFile) {
      // Remove all pending and read blocks
@@ -329,7 +331,9 @@ void TFilePrefetch::SetFile(TFile *file)
    }
       
    fFile = file;
-   fSemChangeFile->Post();
+   if (!fThreadJoined) {
+     fSemChangeFile->Post();
+   }
 }
 
 
@@ -518,46 +522,18 @@ void TFilePrefetch::SaveBlockInCache(TFPBlock* block)
    delete md;
 }
 
-//____________________________________________________________________________________________
-Bool_t TFilePrefetch::CheckCachePath(const char* locationCache)
-{
-   // Validate the input file cache path.
-
-   Bool_t found = true;
-   TString path = locationCache;
-   Ssiz_t pos = path.Index(":/");
-
-   if (pos > 0) {
-      TSubString prot   = path(0, pos);
-      TSubString dir  = path(pos + 2, path.Length());
-      TString protocol(prot);
-      TString directory(dir);
-
-      for(Int_t i=0; i < directory.Sizeof()-1; i++)
-        if (!isdigit(directory[i]) && !isalpha(directory[i]) && directory[i] !='/'
-            && directory[i] != ':' && directory[i] != '_'){
-           found = false;
-           break;
-        }
-   } else
-      found = false;
-
-   return found;
-}
 
 //____________________________________________________________________________________________
 Bool_t TFilePrefetch::SetCache(const char* path)
 {
    // Set the path of the cache directory.
+  fPathCache = path;
+  
+  if (!gSystem->OpenDirectory(path)){
+    return (!gSystem->mkdir(path) ? true : false);
+  }
 
-   if (CheckCachePath(path)){
-      fPathCache = path;
-
-      if (!gSystem->OpenDirectory(path)){
-         gSystem->mkdir(path);
-      }
-   } else
-      return false;
-   return true;
+  // Directory already exists
+  return true;
 }
 

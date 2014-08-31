@@ -52,9 +52,9 @@ protected:
    TGRadioButton       *fDim0;            // 3D-Plot RadioButton
    TGLayoutHints       *fDimlh;           // layout hints for 2D-Plot RadioButton
    TGLayoutHints       *fDim0lh;          // layout hints for 3D-Plot RadioButton
-   TGComboBox	         *fTypeCombo;       // histogram type combo box
-   TGComboBox 	        *fCoordsCombo;     // Coordinate System combo box
-   TGComboBox 	        *fErrorCombo;      // Error combo box
+   TGComboBox          *fTypeCombo;       // histogram type combo box
+   TGComboBox          *fCoordsCombo;     // Coordinate System combo box
+   TGComboBox          *fErrorCombo;      // Error combo box
    TGCheckButton       *fHistOnOff;       // Draw a simple histogram with default options
    TGCheckButton       *fAddMarker;       // Draw a Marker on top of each bin
    TGCheckButton       *fAddB;            // Draw a Bar Chart
@@ -171,6 +171,8 @@ public:
    virtual void DoCancel();
    virtual void PaintBox3D(Float_t *p1, Float_t *p2,Float_t *p3, Float_t *p4);
    Int_t* Dividers(Int_t n);
+   virtual void RecursiveRemove(TObject* obj);
+
 
    ClassDef(TH1Editor,0)  // TH1 editor
 };

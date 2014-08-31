@@ -29,6 +29,7 @@
 #include <Cocoa/Cocoa.h>
 
 #include "CocoaUtils.h"
+#include "RConfigure.h"
 #include "RVersion.h"
 
 //
@@ -422,7 +423,7 @@ void WaitLogo()
    
    if (showAboutInfo) {
       delegate = [[ROOTSplashScreenAppDelegate alloc] init];
-      [NSApp setDelegate : delegate];
+      [NSApp setDelegate : (id<NSFileManagerDelegate>)delegate];
    }
 
    RunEventLoop();

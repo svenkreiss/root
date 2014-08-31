@@ -146,7 +146,7 @@ TGeoChecker::~TGeoChecker()
 }
 
 //______________________________________________________________________________
-void TGeoChecker::OpProgress(const char *opname, Long64_t current, Long64_t size, TStopwatch *watch, Bool_t last, Bool_t refresh)
+void TGeoChecker::OpProgress(const char *opname, Long64_t current, Long64_t size, TStopwatch *watch, Bool_t last, Bool_t refresh, const char *msg)
 {
 // Print current operation progress.
    static Long64_t icount = 0;
@@ -161,6 +161,8 @@ void TGeoChecker::OpProgress(const char *opname, Long64_t current, Long64_t size
    const char symbol[4] = {'=','\\','|','/'}; 
    char progress[11] = "          ";
    Int_t ichar = icount%4;
+   TString message(msg);
+   message += "         ";
    
    if (!refresh) {
       nrefresh = 0;
@@ -198,9 +200,9 @@ void TGeoChecker::OpProgress(const char *opname, Long64_t current, Long64_t size
    }
    if (refresh && oneoftwo) {
       nname = oname;
-      if (fNchecks <= 0) fNchecks = nrefresh+1;
+      if (fNchecks <= nrefresh) fNchecks = nrefresh+1;
       Int_t pctdone = (Int_t)(100.*nrefresh/fNchecks);
-      oname = TString::Format("     == %d%% ==", pctdone);
+      oname = TString::Format("     == %3d%% ==", pctdone);
    }         
    Double_t percent = 100.0*ocurrent/osize;
    Int_t nchar = Int_t(percent/10);
@@ -215,8 +217,8 @@ void TGeoChecker::OpProgress(const char *opname, Long64_t current, Long64_t size
    if(size<10000) fprintf(stderr, "%s [%10s] %4lld ", oname.Data(), progress, ocurrent);
    else if(size<100000) fprintf(stderr, "%s [%10s] %5lld ",oname.Data(), progress, ocurrent);
    else fprintf(stderr, "%s [%10s] %7lld ",oname.Data(), progress, ocurrent);
-   if (time>0.) fprintf(stderr, "[%6.2f %%]   TIME %.2d:%.2d:%.2d             \r", percent, hours, minutes, seconds);
-   else fprintf(stderr, "[%6.2f %%]\r", percent);
+   if (time>0.) fprintf(stderr, "[%6.2f %%]   TIME %.2d:%.2d:%.2d  %s\r", percent, hours, minutes, seconds, message.Data());
+   else fprintf(stderr, "[%6.2f %%]  %s\r", percent, message.Data());
    if (refresh && oneoftwo) oname = nname;
    if (owatch) owatch->Continue();
    if (last) {
@@ -325,7 +327,7 @@ void TGeoChecker::CheckBoundaryErrors(Int_t ntracks, Double_t radius)
                strncpy(cdir,"Forward",10);
                bug->Fill();
             }
-	         break;
+            break;
          }
       }
       
@@ -352,7 +354,7 @@ void TGeoChecker::CheckBoundaryErrors(Int_t ntracks, Double_t radius)
    fTimer->Stop();
 
    printf("CPU time/point = %5.2emus: Real time/point = %5.2emus\n",
-	       1000000.*fTimer->CpuTime()/itry,1000000.*fTimer->RealTime()/itry);
+          1000000.*fTimer->CpuTime()/itry,1000000.*fTimer->RealTime()/itry);
    bug->Write();
    delete bug;
    bug=0;
@@ -401,7 +403,7 @@ void TGeoChecker::CheckBoundaryReference(Int_t icheck)
       for (Int_t i=0;i<nentries;i++) {
          bug->GetEntry(i);
          printf("%-9s error push=%g p=%5.4f %5.4f %5.4f s=%5.4f dot=%5.4f path=%s\n",
-	             cdir,push,xyz[0],xyz[1],xyz[2],1.,1.,path);
+                cdir,push,xyz[0],xyz[1],xyz[2],1.,1.,path);
       }
    } else {
       if (icheck>=nentries) return;
@@ -409,7 +411,7 @@ void TGeoChecker::CheckBoundaryReference(Int_t icheck)
       TGeoManager::SetVerboseLevel(5);
       bug->GetEntry(icheck);
       printf("%-9s error push=%g p=%5.4f %5.4f %5.4f s=%5.4f dot=%5.4f path=%s\n",
-	          cdir,push,xyz[0],xyz[1],xyz[2],1.,1.,path);
+             cdir,push,xyz[0],xyz[1],xyz[2],1.,1.,path);
       fGeoManager->SetCurrentPoint(xyz);
       fGeoManager->SetCurrentDirection(dir);
       fGeoManager->FindNode();

@@ -383,6 +383,7 @@ Double_t RooRealSumPdf::analyticalIntegralWN(Int_t code, const RooArgSet* normSe
      std::auto_ptr<RooArgSet> nset(  _normIntMgr.nameSet1ByIndex(code-1)->select(*vars) );
      RooArgSet dummy;
      Int_t code2 = getAnalyticalIntegralWN(*iset,dummy,nset.get(),rangeName);
+     (void)code2;
      assert(code==code2); // must have revived the right (sterilized) slot...
      cache = (CacheElem*) _normIntMgr.getObjByIndex(code-1) ;
      assert(cache!=0);
@@ -469,7 +470,6 @@ Double_t RooRealSumPdf::expectedEvents(const RooArgSet* nset) const
 //_____________________________________________________________________________
 std::list<Double_t>* RooRealSumPdf::binBoundaries(RooAbsRealLValue& obs, Double_t xlo, Double_t xhi) const
 {
-
   list<Double_t>* sumBinB = 0 ;
   Bool_t needClean(kFALSE) ;
   
@@ -576,6 +576,22 @@ std::list<Double_t>* RooRealSumPdf::plotSamplingHint(RooAbsRealLValue& obs, Doub
   return sumHint ;
 }
 
+
+
+
+//_____________________________________________________________________________
+void RooRealSumPdf::setCacheAndTrackHints(RooArgSet& trackNodes) 
+{
+  // Label OK'ed components of a RooRealSumPdf with cache-and-track
+  RooFIter siter = funcList().fwdIterator() ;
+  RooAbsArg* sarg ;
+  while ((sarg=siter.next())) {
+    if (sarg->canNodeBeCached()==Always) {
+      trackNodes.add(*sarg) ;
+      //cout << "tracking node RealSumPdf component " << sarg->IsA()->GetName() << "::" << sarg->GetName() << endl ;
+    }
+  }
+}
 
 
 

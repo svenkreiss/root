@@ -104,14 +104,27 @@ SYSTEML       = $(UNIXL)
 SYSTEMO       = $(UNIXO)
 SYSTEMDO      = $(UNIXDO)
 else
+ifeq ($(ARCH),win64gcc)
+MODULES      += core/unix
+SYSTEML       = $(UNIXL)
+SYSTEMO       = $(UNIXO)
+SYSTEMDO      = $(UNIXDO)
+else
 MODULES      += core/unix
 SYSTEML       = $(UNIXL)
 SYSTEMO       = $(UNIXO)
 SYSTEMDO      = $(UNIXDO)
 endif
 endif
+endif
 ifeq ($(PLATFORM),ios)
 MODULES      += graf2d/ios
+endif
+ifeq ($(BUILDVC),yes)
+MODULES      += math/vc
+endif
+ifeq ($(BUILDVDT),yes)
+MODULES      += math/vdt
 endif
 ifeq ($(BUILDCOCOA),yes)
 MODULES      += graf2d/quartz
@@ -285,13 +298,18 @@ ifeq ($(BUILDTMVA),yes)
 MODULES      += tmva math/genetic
 endif
 ifeq ($(HASXRD),yes)
+ifeq ($(BUILDXRDCLT),no)
 ifeq ($(ARCH),win32)
 MODULES      += proof/proofd
 endif
 MODULES      += proof/proofx
 endif
+endif
 ifeq ($(BUILDAFDSMGRD),yes)
 MODULES      += proof/afdsmgrd
+endif
+ifeq ($(BUILDHTTP),yes)
+MODULES      += net/http
 endif
 
 -include MyModules.mk   # allow local modules
@@ -313,7 +331,7 @@ MODULES      += core/unix core/winnt graf2d/x11 graf2d/x11ttf \
                 geom/gdml graf3d/eve net/glite misc/memstat \
                 math/genvector net/bonjour graf3d/gviz3d graf2d/gviz \
                 proof/proofbench proof/afdsmgrd cint/cling graf2d/ios \
-                graf2d/quartz graf2d/cocoa core/macosx
+                graf2d/quartz graf2d/cocoa core/macosx net/http
 MODULES      := $(sort $(MODULES))   # removes duplicates
 endif
 
@@ -527,6 +545,9 @@ STATICEXTRALIBS += $(SSLLIB)
 endif
 ifeq ($(XFTLIB),yes)
 STATICEXTRALIBS += -lXft
+endif
+ifeq ($(BUILDCOCOA),yes)
+STATICEXTRALIBS += -framework Cocoa -framework OpenGL
 endif
 
 ##### libCore #####
@@ -770,10 +791,10 @@ buildtools:
 		   TARGETFLAGS=-DR__$(shell echo $(ARCH) | tr 'a-z' 'A-Z') \
 		   rootcint cint/cint/lib/posix/mktypes \
 		) || exit 1;
+endif
 
 distclean::
-		@rm -rf $(BUILDTOOLSDIR)
-endif
+		@rm -rf buildtools
 
 postbin:        $(POSTBIN)
 
@@ -842,11 +863,11 @@ $(CORELIB): $(COREO) $(COREDO) $(CINTLIB) $(CLINGLIB) $(PCREDEP) $(CORELIBDEP)
 ifneq ($(ARCH),alphacxx6)
 	@$(MAKELIB) $(PLATFORM) $(LD) "$(LDFLAGS)" \
 	   "$(SOFLAGS)" libCore.$(SOEXT) $@ "$(COREO) $(COREDO)" \
-	   "$(CORELIBEXTRA) $(CLINGLIB) $(PCRELDFLAGS) $(PCRELIB) $(CRYPTLIBS)"
+	   "$(CORELIBEXTRA) $(OSTHREADLIB) $(CLINGLIB) $(PCRELDFLAGS) $(PCRELIB) $(CRYPTLIBS)"
 else
 	@$(MAKELIB) $(PLATFORM) $(LD) "$(CORELDFLAGS)" \
 	   "$(SOFLAGS)" libCore.$(SOEXT) $@ "$(COREO) $(COREDO)" \
-	   "$(CORELIBEXTRA) $(CLINGLIB) $(PCRELDFLAGS) $(PCRELIB) $(CRYPTLIBS)"
+	   "$(CORELIBEXTRA) $(OSTHREADLIB) $(CLINGLIB) $(PCRELDFLAGS) $(PCRELIB) $(CRYPTLIBS)"
 endif
 
 $(COREMAP): $(RLIBMAP) $(MAKEFILEDEP) $(COREL)
@@ -855,13 +876,13 @@ $(COREMAP): $(RLIBMAP) $(MAKEFILEDEP) $(COREL)
 map::   $(ALLMAPS)
 
 dist:
-	@$(MAKEDIST) $(GCC_VERS)
+	@$(MAKEDIST) $(ROOT_SRCDIR) $(GCC_VERS)
 
 distsrc:
 	@$(MAKEDISTSRC)
 
 distmsi: build/package/msi/makemsi$(EXEEXT)
-	$(MAKEDIST) -msi
+	$(MAKEDIST) $(ROOT_SRCDIR) -msi
 
 build/package/msi/makemsi$(EXEEXT): build/package/msi/makemsi.cxx build/version_number
 	@vers=`sed 's|\(.*\)/\(.*\)|\1.\2|' < build/version_number` && \
@@ -1153,7 +1174,7 @@ install: all
 	   echo "Installing libraries in $(DESTDIR)$(LIBDIR)"; \
 	   $(INSTALLDIR)                        $(DESTDIR)$(LIBDIR); \
 	   $(INSTALLDATA) lib/*                 $(DESTDIR)$(LIBDIR); \
-	   if [ x"$(ARCH)" = x"win32gcc" ]; then \
+	   if ([ x"$(ARCH)" = x"win32gcc" ] || [ x"$(ARCH)" = x"win64gcc" ]); then \
 	      $(INSTALLDATA) bin/*.dll             $(DESTDIR)$(BINDIR); \
 	      for f in $(DESTDIR)$(LIBDIR)/*.dll; do \
 	         bindll=`basename $$f | sed 's,\..*$$,,'`; \
@@ -1370,7 +1391,20 @@ runtimedirs:
 			--exclude '*.lib' \
 			--exclude '*.dll' \
 			$(ROOT_SRCDIR)/$$d . ; \
-	done;
+	done; \
+	echo "Rsync'ing $(ROOT_SRCDIR)/geom/gdml/*.py..."; \
+	$(RSYNC) \
+		--include '*.py' \
+		--exclude '*' \
+		$(ROOT_SRCDIR)/geom/gdml/ geom/gdml ; \
+	echo "Rsync'ing $(ROOT_SRCDIR)/tmva/test/*.C, *.gif, *.png..."; \
+	$(RSYNC) \
+		--include '*.C' \
+		--include '*.gif' \
+		--include '*.png' \
+		--include 'README' \
+		--exclude '*' \
+		$(ROOT_SRCDIR)/tmva/test/ tmva/test ;
 endif
 
 showbuild:

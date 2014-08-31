@@ -25,7 +25,7 @@
 
 using namespace std;
 
-const bool __DRAW__ = 1;
+bool showGraphics = false;
 
 TRandom2 r(17);
 Int_t bsize[] = { 10, 10, 10 };
@@ -60,7 +60,7 @@ ostream& operator << (ostream& out, ROOT::Fit::BinData& bd)
    const unsigned int npoints( bd.NPoints() );
    for ( unsigned int i = 0; i < npoints; ++i )
    {
-      double value, error;
+      double value = 0, error = 0;
       const double *x = bd.GetPoint(i, value, error);
       for ( unsigned int j = 0; j < ndim; ++j )
       {
@@ -80,7 +80,7 @@ int findBin(ROOT::Fit::BinData& bd, const double *x)
 
    for ( unsigned int i = 0; i < npoints; ++i )
    {
-      double value1, error1;
+      double value1 = 0, error1 = 0;
       const double *x1 = bd.GetPoint(i, value1, error1);
       bool thisIsIt = true;
       for ( unsigned int j = 0; j < ndim; ++j )
@@ -108,12 +108,12 @@ bool operator ==(ROOT::Fit::BinData& bd1, ROOT::Fit::BinData& bd2)
 
    for ( unsigned int i = 0; i < npoints && equals; ++i )
    {
-      double value1, error1;
+      double value1 = 0, error1 = 0;
       const double *x1 = bd1.GetPoint(i, value1, error1);
 
       int bin = findBin(bd2, x1);
 
-      double value2 = 0, error2;
+      double value2 = 0, error2 = 0;
       const double *x2 = bd2.GetPoint(bin, value2, error2);
 
       equals &= ( value1 == value2 );
@@ -149,19 +149,20 @@ void fillSparse(THnSparse* s, TF1* f, int nEvents = 5)
    const unsigned int ndim = s->GetNdimensions();
 
    for ( Int_t e = 0; e < nEvents; ++e ) {
-      Double_t points[ndim];
+      Double_t *points = new Double_t[ndim];
       for ( UInt_t i = 0; i < ndim; ++ i )
          points[i] = r.Uniform( xmin[0] * .9 , xmax[0] * 1.1 );
       double value = gRandom->Poisson( f->EvalPar(points));
       s->Fill(points, value );
       cout << value << " " << s->GetNbins() << endl;
+      delete [] points;
    }
 }
 
 void DoFit(THnSparse* s, TF1* f, ROOT::Fit::BinData& bd)
 {
    ///////////////// CREATE THE SPARSE DATA
-   cout << "Retrieving the Sparse Data Structure" << endl;
+   cout << "DoFit: dim = " << s->GetNdimensions() << " - Retrieving the Sparse Data Structure" << endl;
    //ROOT::Fit::SparseData d(s);
    ROOT::Fit::SparseData d(s->GetNdimensions(), xmin, xmax);
    ROOT::Fit::FillData(d, s, 0);
@@ -180,19 +181,19 @@ void DoFit(THnSparse* s, TF1* f, ROOT::Fit::BinData& bd)
    opt.fIntegral = true;
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Likelihood with BinData and NoCeros *******" << endl;
-   ROOT::Fit::BinData bdNoCeros;
-   d.GetBinDataNoZeros(bdNoCeros);
-   ret = fitter.LikelihoodFit(bdNoCeros, if2);
+   cout << "\n ******* Likelihood with BinData and NoZeros *******" << endl;
+   ROOT::Fit::BinData bdNoZeros;
+   d.GetBinDataNoZeros(bdNoZeros);
+   ret = fitter.LikelihoodFit(bdNoZeros, if2, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
 
    /////////////////////////////////////////////////////////////////////////
-   cout << "\n ******* Likelihood with BinData with Ceros *******" << endl;
-   ROOT::Fit::BinData bdWithCeros(opt);
-   d.GetBinDataIntegral(bdWithCeros);
-   ret = fitter.LikelihoodFit(bdWithCeros, if2);
+   cout << "\n ******* Likelihood with BinData with Zeros *******" << endl;
+   ROOT::Fit::BinData bdWithZeros(opt);
+   d.GetBinDataIntegral(bdWithZeros);
+   ret = fitter.LikelihoodFit(bdWithZeros, if2, true);
    fitter.Result().Print(std::cout); 
    if (!ret)  
       std::cout << "Fit Failed " << std::endl;
@@ -202,6 +203,9 @@ void DoFit(THnSparse* s, TF1* f, ROOT::Fit::BinData& bd)
 
 void fitSparse1D()
 {
+
+   std::cout << "1D SPARSE FIT \n" << std::endl;
+
    const unsigned int ndim = 1;
 
    THnSparseD* s1 = new THnSparseD("mfND-s1", "s1-Title", ndim, bsize, xmin, xmax);
@@ -211,7 +215,7 @@ void fitSparse1D()
 
    fillSparse(s1,f,5);
    
-   cout << "Retrieving the Sparse Data Structure" << endl;
+   cout << "1D Fit : Retrieving the Sparse Data Structure" << endl;
    //ROOT::Fit::SparseData d(s1);
    ROOT::Fit::SparseData d(ndim, xmin, xmax);
    ROOT::Fit::FillData(d, s1, 0);
@@ -219,6 +223,8 @@ void fitSparse1D()
 
 void fitSparse2D()
 {
+
+   std::cout << "2D SPARSE FIT \n" << std::endl;
    const unsigned int ndim = 2;
 
    THnSparseD* s1 = new THnSparseD("mfND-s1", "s1-Title", ndim, bsize, xmin, xmax);
@@ -246,7 +252,7 @@ void fitSparse2D()
    TH2D* h2 = new TH2D("2D Blanked Hist Fit", "h1-title",  
                        bsize[0], xmin[0], xmax[0], 
                        bsize[1], xmin[1], xmax[1]);
-   cout << "Filling second histogram" << endl;
+   //cout << "Filling second histogram" << endl;
    for ( unsigned int i = 0; i < bd.NPoints(); ++i )
    {
       const double* x;
@@ -256,12 +262,18 @@ void fitSparse2D()
       h2->Fill(x[0], x[1], value);
    }
 
-   h2->Draw("colZ");
+   if (showGraphics) { 
+      h2->Draw("colZ");
+      f->Draw("SAME");
+      gPad->Update(); 
+   }
 }
 
 void fitSparse3D()
 {
    const unsigned int ndim = 3;
+
+   std::cout << "3D SPARSE FIT \n" << std::endl;
 
    THnSparseD* s1 = new THnSparseD("mfND-s1", "s1-Title", ndim, bsize, xmin, xmax);
 
@@ -296,18 +308,46 @@ void fitSparse3D()
 
 int main(int argc, char** argv)
 {
+   
+   bool do3dfit = false;
+
+  // Parse command line arguments 
+  for (Int_t i=1 ;  i<argc ; i++) {
+     std::string arg = argv[i] ;
+     if (arg == "-g") { 
+      showGraphics = true;
+     }
+     if (arg == "-v") { 
+      showGraphics = true;
+      //verbose = true;
+     }
+     if (arg == "-3d") { 
+      do3dfit = true;
+     }
+     if (arg == "-h") { 
+        cerr << "Usage: " << argv[0] << " [-g] [-v]\n";
+        cerr << "  where:\n";
+        cerr << "     -g  :  graphics mode\n";
+        cerr << "     -v  :  verbose  mode\n";
+        cerr << "     -3d :  3d fit";
+        cerr << endl;
+        return -1; 
+     }
+   }
+
+
    TApplication* theApp = 0;
 
-   if ( __DRAW__ )
+   if ( showGraphics )
       theApp = new TApplication("App",&argc,argv);
 
-   fitSparse1D();
+   // fitSparse1D();
    fitSparse2D();
-   fitSparse3D();
+   if (do3dfit) fitSparse3D();
   
    cout << "C'est fini!" << endl;
 
-   if ( __DRAW__ ) {
+   if ( showGraphics ) {
       theApp->Run();
       delete theApp;
       theApp = 0;

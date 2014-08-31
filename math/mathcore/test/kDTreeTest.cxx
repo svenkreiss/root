@@ -8,8 +8,11 @@
   //
 */
 
+#include <iostream>
 //#include <malloc.h>
 #include "TSystem.h"
+#include "TApplication.h"
+#include "TCanvas.h"
 #include "TMatrixD.h"
 #include "TRandom.h"
 #include "TGraph.h"
@@ -26,7 +29,8 @@ void TestSpeed(Int_t npower2 = 20, Int_t bsize = 10);
 //void TestkdtreeIF(Int_t npoints=1000, Int_t bsize=9, Int_t nloop=1000, Int_t mode = 2);
 //void TestSizeIF(Int_t nsec=36, Int_t nrows=159, Int_t npoints=1000,  Int_t bsize=10, Int_t mode=1);
 
-
+int verbose = 0;
+bool showGraphics = false; 
 
 Float_t Mem()
 {
@@ -70,7 +74,7 @@ void TestBuild(const Int_t npoints, const Int_t bsize){
    Float_t end = Mem();
    printf("Memory leak %f KB\n", end-before);
    delete[] data0;
-   return;	
+   return;
 }
 
 //______________________________________________________________________
@@ -249,7 +253,11 @@ void TestSpeed(Int_t npower2, Int_t bsize)
     //timer.Print("u");
     delete kdtree;
   }
-  g->Draw("apl");
+  if (showGraphics) {
+     g->Draw("apl");
+     if (gPad) gPad->Update();
+  }
+  if (verbose) g->Print();
   delete[] data0;
   return;
 }
@@ -322,32 +330,32 @@ void  TestkdtreeIF(Int_t npoints, Int_t bsize, Int_t nloop, Int_t mode)
     Int_t nfound = 0;
     for (Int_t kloop = 0;kloop<nloop;kloop++){
       if (kloop==0){
-	counteriter = 0;
-	counterfound= 0;
-	countern    = 0;
+   counteriter = 0;
+   counterfound= 0;
+   countern    = 0;
       }
       for (Int_t i=0;i<npoints;i++){
-	Float_t point[2]={data[0][i],data[1][i]};
-	Float_t delta[2]={drangey,drangez};
-	Int_t iter  =0;
-	nfound =0;
-	Int_t bnode =0;
-	//kdtree->FindBNode(point,delta, bnode);
-	//continue;
-	kdtree->FindInRangeA(point,delta,res,nfound,iter,bnode);
-	if (kloop==0){
-	  //Bool_t isOK = kTRUE;
-	  Bool_t isOK = kFALSE;
-	  for (Int_t ipoint=0;ipoint<nfound;ipoint++)
-	    if (res[ipoint]==i) isOK =kTRUE;
-	  counteriter+=iter;
-	  counterfound+=nfound;
-	  if (isOK) {
-	    countern++;
-	  }else{
-	    printf("Bug\n");
-	  }
-	}
+   Float_t point[2]={data[0][i],data[1][i]};
+   Float_t delta[2]={drangey,drangez};
+   Int_t iter  =0;
+   nfound =0;
+   Int_t bnode =0;
+   //kdtree->FindBNode(point,delta, bnode);
+   //continue;
+   kdtree->FindInRangeA(point,delta,res,nfound,iter,bnode);
+   if (kloop==0){
+     //Bool_t isOK = kTRUE;
+     Bool_t isOK = kFALSE;
+     for (Int_t ipoint=0;ipoint<nfound;ipoint++)
+       if (res[ipoint]==i) isOK =kTRUE;
+     counteriter+=iter;
+     counterfound+=nfound;
+     if (isOK) {
+       countern++;
+     }else{
+       printf("Bug\n");
+     }
+   }
       }
     }
     
@@ -541,7 +549,35 @@ void TestRange()
 
 
 //______________________________________________________________________
-int main() { 
+int main(int argc,  char *argv[]) {  
+
+
+   // Parse command line arguments
+   for (Int_t i = 1 ;  i < argc ; i++) {
+      std::string arg = argv[i] ;
+      
+      if (arg == "-v") {
+         std::cout << "kDTreeTest: running in verbose mode" << std::endl;
+         verbose = 1;
+      } 
+      if (arg == "-g") {
+         std::cout << "kDTreeTest: running showing the graphics" << std::endl;
+         showGraphics = true;
+      } 
+   }
+
+   TApplication* theApp = 0;
+   if ( showGraphics )
+      theApp = new TApplication("App",&argc,argv);
+
    kDTreeTest();
+   
+   if ( showGraphics )
+   {
+      theApp->Run();
+      delete theApp;
+      theApp = 0;
+   }
+
    return 0; 
 }

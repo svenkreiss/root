@@ -16,7 +16,7 @@
 #include <iostream>
 
 #include "TH1.h"
-#include "TRef.h"
+#include "RooStats/HistFactory/HistRef.h"
 
 namespace RooStats{
 namespace HistFactory {
@@ -45,6 +45,8 @@ namespace HistFactory {
   class OverallSys {
 
   public:
+
+    OverallSys() : fLow(0), fHigh(0) {} 
 
     void SetName( const std::string& Name ) { fName = Name; }
     std::string GetName() { return fName; }
@@ -150,8 +152,8 @@ namespace HistFactory {
     std::string fHistoPathHigh;
 
     // The Low and High Histograms
-    TRef fhLow;
-    TRef fhHigh;
+    HistRef fhLow;
+    HistRef fhHigh;
 
   };
 
@@ -159,6 +161,8 @@ namespace HistFactory {
   class HistoFactor {
 
   public:
+
+    HistoFactor() : fhLow(NULL), fhHigh(NULL) {;}
 
     void SetName( const std::string& Name ) { fName = Name; }
     std::string GetName() { return fName; }
@@ -203,8 +207,8 @@ namespace HistFactory {
     std::string fHistoPathHigh;
 
     // The Low and High Histograms
-    TRef fhLow;
-    TRef fhHigh;
+    HistRef fhLow;
+    HistRef fhHigh;
 
   };
 
@@ -212,6 +216,8 @@ namespace HistFactory {
   class ShapeSys {
 
   public:
+
+    ShapeSys() :  fConstraintType(Constraint::Gaussian), fhError(NULL) {}
 
     void SetName( const std::string& Name ) { fName = Name; }
     std::string GetName() { return fName; }
@@ -244,7 +250,7 @@ namespace HistFactory {
     Constraint::Type fConstraintType; 
 
     // The histogram holding the error
-    TRef fhError;
+    HistRef fhError;
 
   };
 
@@ -342,7 +348,7 @@ namespace HistFactory {
     std::string fHistoPath;
 
     // The histogram holding the error
-    TRef fhError;
+    HistRef fhError;
 
   };
 

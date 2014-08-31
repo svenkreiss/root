@@ -455,18 +455,18 @@ Double_t TMath::Gaus(Double_t x, Double_t mean, Double_t sigma, Bool_t norm)
 }
 
 //______________________________________________________________________________
-Double_t TMath::Landau(Double_t x, Double_t mpv, Double_t sigma, Bool_t norm)
+Double_t TMath::Landau(Double_t x, Double_t mu, Double_t sigma, Bool_t norm)
 {
    // The LANDAU function. 
-   // mpv is a location parameter and correspond approximatly to the most probable value
+   // mu is a location parameter and correspond approximatly to the most probable value
    // and sigma is a scale parameter (not the sigma of the full distribution which is not defined)
-   // Note that for mpv=0 and sigma=1 (default values) the exact location of the maximum of the distribution (most proble value) is at 
-   // x = -0.22278
+   // Note that for mu=0 and sigma=1 (default values) the exact location of the maximum of the distribution 
+   // (most proble value) is at x = -0.22278
    // This function has been adapted from the CERNLIB routine G110 denlan.
    // If norm=kTRUE (default is kFALSE) the result is divided by sigma
 
    if (sigma <= 0) return 0; 
-   Double_t den = ::ROOT::Math::landau_pdf( (x-mpv)/sigma ); 
+   Double_t den = ::ROOT::Math::landau_pdf( (x-mu)/sigma ); 
    if (!norm) return den;
    return den/sigma;
 }
@@ -549,8 +549,8 @@ Double_t TMath::Poisson(Double_t x, Double_t par)
 {
   // compute the Poisson distribution function for (x,par)
   // The Poisson PDF is implemented by means of Euler's Gamma-function
-  // (for the factorial), so for all integer arguments it is correct.
-  // BUT for non-integer values it IS NOT equal to the Poisson distribution.
+  // (for the factorial), so for any x integer argument it is correct.
+  // BUT for non-integer x values, it IS NOT equal to the Poisson distribution.
   // see TMath::PoissonI to get a non-smooth function.
   // Note that for large values of par, it is better to call
   //     TMath::Gaus(x,par,sqrt(par),kTRUE)

@@ -33,6 +33,7 @@ class TGeoMedium;
 class TGeoShape;
 class TVirtualGeoPainter;
 class THashList;
+class TGeoParallelWorld;
 
 ////////////////////////////////////////////////////////////////////////////
 //                                                                        //
@@ -71,7 +72,7 @@ private :
    Int_t                 fMaxVisNodes;      // maximum number of visible nodes
    TVirtualGeoTrack     *fCurrentTrack;     //! current track
    Int_t                 fNpdg;             // number of different pdg's stored
-   Int_t                 fPdgId[256];       // pdg conversion table
+   Int_t                 fPdgId[1024];      // pdg conversion table
    Bool_t                fClosed;           //! flag that geometry is closed
    Bool_t                fLoopVolumes;      //! flag volume lists loop
    Bool_t                fStreamVoxels;     // flag to allow voxelization I/O
@@ -133,8 +134,9 @@ private :
    Int_t                *fValuePNEId;       //[fSizePNEId] array of pointers to PN entries with ID's
    Int_t                 fMaxThreads;       //! Max number of threads
    Bool_t                fMultiThread;      //! Flag for multi-threading
+   Bool_t                fUsePWNav;         // Activate usage of parallel world in navigation
+   TGeoParallelWorld    *fParallelWorld;    // Parallel world
 //--- private methods
-
    Bool_t                IsLoopingVolumes() const     {return fLoopVolumes;}
    void                  Init();
    Bool_t                InitArrayPNE() const;
@@ -237,7 +239,7 @@ public:
    void                   DrawTracks(Option_t *option=""); // *MENU*
    void                   SetParticleName(const char *pname) {fParticleName=pname;}
    const char            *GetParticleName() const {return fParticleName.Data();}
-   void                   DrawPath(const char *path);
+   void                   DrawPath(const char *path, Option_t *option="");
    void                   PrintOverlaps() const; // *MENU*
    void                   RandomPoints(const TGeoVolume *vol, Int_t npoints=10000, Option_t *option="");
    void                   RandomRays(Int_t nrays=1000, Double_t startx=0, Double_t starty=0, Double_t startz=0, const char *target_vol=0, Bool_t check_norm=kFALSE);
@@ -431,7 +433,7 @@ public:
    static Int_t           GetMaxDaughters();
    static Int_t           GetMaxLevels();
    static Int_t           GetMaxXtruVert();
-   Int_t                  GetMaxThreads() const {return fMaxThreads;}
+   Int_t                  GetMaxThreads() const {return fMaxThreads-1;}
    void                   SetMaxThreads(Int_t nthreads);
    void                   SetMultiThread(Bool_t flag=kTRUE) {fMultiThread = flag;}
    Bool_t                 IsMultiThread() const {return fMultiThread;}
@@ -542,7 +544,13 @@ public:
    Bool_t                 PopPoint(Int_t index) {return GetCurrentNavigator()->PopPoint(index);}
    void                   PopDummy(Int_t ipop=9999) {return GetCurrentNavigator()->PopDummy(ipop);}
 
-   ClassDef(TGeoManager, 12)          // geometry manager
+   //--- parallel world navigation
+   TGeoParallelWorld    *CreateParallelWorld(const char *name);
+   TGeoParallelWorld    *GetParallelWorld() const {return fParallelWorld;}
+   void                  SetUseParallelWorldNav(Bool_t flag);
+   Bool_t                IsParallelWorldNav() const {return fUsePWNav;}
+
+   ClassDef(TGeoManager, 14)          // geometry manager
 };
 
 R__EXTERN TGeoManager *gGeoManager;

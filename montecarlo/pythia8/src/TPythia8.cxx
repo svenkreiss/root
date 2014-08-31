@@ -143,6 +143,14 @@ Bool_t TPythia8::Initialize(Int_t idAin, Int_t idBin, Double_t ecms)
 }
 
 //___________________________________________________________________________
+Bool_t TPythia8::Initialize(Int_t idAin, Int_t idBin, Double_t eAin, Double_t eBin)
+{
+   // Initialization
+   AddParticlesToPdgDataBase();
+   return fPythia->init(idAin, idBin, eAin, eBin);
+}
+
+//___________________________________________________________________________
 void TPythia8::GenerateEvent()
 {
    // Generate the next event
@@ -167,49 +175,49 @@ Int_t TPythia8::ImportParticles(TClonesArray *particles, Option_t *option)
 
    if (!strcmp(option,"") || !strcmp(option,"Final")) {
       for (i = 0; i < fNumberOfParticles; i++) {
-	if (fPythia->event[i].id() == 90) continue;
+         if (fPythia->event[i].id() == 90) continue;
          if (fPythia->event[i].isFinal()) {
             new(clonesParticles[nparts]) TParticle(
-                fPythia->event[i].id(),
-                fPythia->event[i].isFinal(),
-                fPythia->event[i].mother1() + ioff,
-                fPythia->event[i].mother2() + ioff,
-                fPythia->event[i].daughter1() + ioff,
-                fPythia->event[i].daughter2() + ioff,
-                fPythia->event[i].px(),     // [GeV/c]
-                fPythia->event[i].py(),     // [GeV/c]
-                fPythia->event[i].pz(),     // [GeV/c]
-                fPythia->event[i].e(),      // [GeV]
-                fPythia->event[i].xProd(),  // [mm]
-                fPythia->event[i].yProd(),  // [mm]
-                fPythia->event[i].zProd(),  // [mm]
-                fPythia->event[i].tProd()); // [mm/c]
-		nparts++;
-	    } // final state partice
-	} // particle loop
-    } else if (!strcmp(option,"All")) {
-	for (i = 0; i < fNumberOfParticles; i++) {
-	  if (fPythia->event[i].id() == 90) continue;
-	    new(clonesParticles[nparts]) TParticle(
-		fPythia->event[i].id(),
-		fPythia->event[i].isFinal(),
-		fPythia->event[i].mother1() + ioff,
-		fPythia->event[i].mother2() + ioff,
-		fPythia->event[i].daughter1() + ioff,
-		fPythia->event[i].daughter2() + ioff,
-		fPythia->event[i].px(),       // [GeV/c]
-		fPythia->event[i].py(),       // [GeV/c]
-		fPythia->event[i].pz(),       // [GeV/c]
-		fPythia->event[i].e(),        // [GeV]
-		fPythia->event[i].xProd(),    // [mm]
-		fPythia->event[i].yProd(),    // [mm]
-		fPythia->event[i].zProd(),    // [mm]
-		fPythia->event[i].tProd());   // [mm/c]
-     	        nparts++;
-	} // particle loop
-    }
-    if(ioff==-1)     fNumberOfParticles--;
-    return nparts;
+                                                   fPythia->event[i].id(),
+                                                   fPythia->event[i].isFinal(),
+                                                   fPythia->event[i].mother1() + ioff,
+                                                   fPythia->event[i].mother2() + ioff,
+                                                   fPythia->event[i].daughter1() + ioff,
+                                                   fPythia->event[i].daughter2() + ioff,
+                                                   fPythia->event[i].px(),     // [GeV/c]
+                                                   fPythia->event[i].py(),     // [GeV/c]
+                                                   fPythia->event[i].pz(),     // [GeV/c]
+                                                   fPythia->event[i].e(),      // [GeV]
+                                                   fPythia->event[i].xProd(),  // [mm]
+                                                   fPythia->event[i].yProd(),  // [mm]
+                                                   fPythia->event[i].zProd(),  // [mm]
+                                                   fPythia->event[i].tProd()); // [mm/c]
+            nparts++;
+         } // final state partice
+      } // particle loop
+   } else if (!strcmp(option,"All")) {
+      for (i = 0; i < fNumberOfParticles; i++) {
+         if (fPythia->event[i].id() == 90) continue;
+         new(clonesParticles[nparts]) TParticle(
+                                                fPythia->event[i].id(),
+                                                fPythia->event[i].isFinal(),
+                                                fPythia->event[i].mother1() + ioff,
+                                                fPythia->event[i].mother2() + ioff,
+                                                fPythia->event[i].daughter1() + ioff,
+                                                fPythia->event[i].daughter2() + ioff,
+                                                fPythia->event[i].px(),       // [GeV/c]
+                                                fPythia->event[i].py(),       // [GeV/c]
+                                                fPythia->event[i].pz(),       // [GeV/c]
+                                                fPythia->event[i].e(),        // [GeV]
+                                                fPythia->event[i].xProd(),    // [mm]
+                                                fPythia->event[i].yProd(),    // [mm]
+                                                fPythia->event[i].zProd(),    // [mm]
+                                                fPythia->event[i].tProd());   // [mm/c]
+         nparts++;
+      } // particle loop
+   }
+   if(ioff==-1)     fNumberOfParticles--;
+   return nparts;
 }
 
 //___________________________________________________________________________
@@ -265,6 +273,41 @@ void  TPythia8::ReadConfigFile(const char* string) const
 {
   // Configuration
   fPythia->readFile(string);
+}
+
+//___________________________________________________________________________
+void TPythia8::ListAll() const
+{
+   // Event listing
+   fPythia->settings.listAll();
+}
+
+//___________________________________________________________________________
+void TPythia8::ListChanged() const
+{
+   // Event listing
+   fPythia->settings.listChanged();
+}
+
+//___________________________________________________________________________
+void TPythia8::Plist(Int_t id) const
+{
+   // Event listing
+   fPythia->particleData.list(id);
+}
+
+//___________________________________________________________________________
+void TPythia8::PlistAll() const
+{
+   // Event listing
+   fPythia->particleData.listAll();
+}
+
+//___________________________________________________________________________
+void TPythia8::PlistChanged() const
+{
+   // Event listing
+   fPythia->particleData.listChanged();
 }
 
 //___________________________________________________________________________

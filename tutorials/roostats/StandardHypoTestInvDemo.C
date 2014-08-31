@@ -39,6 +39,7 @@
 #include "TCanvas.h"
 #include "TLine.h"
 #include "TROOT.h"
+#include "TSystem.h"
 
 #include "RooStats/AsymptoticCalculator.h"
 #include "RooStats/HybridCalculator.h"
@@ -57,10 +58,9 @@
 #include "RooStats/HypoTestInverterResult.h"
 #include "RooStats/HypoTestInverterPlot.h"
 
-
 using namespace RooFit;
 using namespace RooStats;
-
+using namespace std; 
 
 bool plotHypoTestResult = true;          // plot test statistic result at each point
 bool writeResult = true;                 // write HypoTestInverterResult in a file 
@@ -72,11 +72,16 @@ bool noSystematics = false;              // force all systematics to be off (i.e
                                          // to their nominal values)
 double nToysRatio = 2;                   // ratio Ntoys S+b/ntoysB
 double maxPOI = -1;                      // max value used of POI (in case of auto scan) 
-bool useProof = false;                    // use Proof Light when using toys (for freq or hybrid)
-int nworkers = 4;                        // number of worker for Proof
+bool useProof = false;                   // use Proof Lite when using toys (for freq or hybrid)
+int nworkers = 0;                        // number of worker for ProofLite (default use all available cores) 
+bool enableDetailedOutput = false;       // enable detailed output with all fit information for each toys (output will be written in result file)
 bool rebuild = false;                    // re-do extra toys for computing expected limits and rebuild test stat
                                          // distributions (N.B this requires much more CPU (factor is equivalent to nToyToRebuild)
 int nToyToRebuild = 100;                 // number of toys used to rebuild 
+int rebuildParamValues=0;                // = 0   do a profile of all the parameters on the B (alt snapshot) before performing a rebuild operation (default)
+                                         // = 1   use initial workspace parameters with B snapshot values 
+                                         // = 2   use all initial workspace parameters with B 
+                                         // Otherwise the rebuild will be performed using 
 int initialFit = -1;                     // do a first  fit to the model (-1 : default, 0 skip fit, 1 do always fit) 
 int randomSeed = -1;                     // random seed (if = -1: use default value, if = 0 always random )
                                          // NOTE: Proof uses automatically a random seed
@@ -84,7 +89,7 @@ int randomSeed = -1;                     // random seed (if = -1: use default va
 int nAsimovBins = 0;                     // number of bins in observables used for Asimov data sets (0 is the default and it is given by workspace, typically is 100)
 
 bool reuseAltToys = false;                // reuse same toys for alternate hypothesis (if set one gets more stable bands)
-
+double confidenceLevel = 0.95;            // confidence level value
 
 
 
@@ -138,9 +143,11 @@ namespace RooStats {
       bool mGenerateBinned;
       bool mUseProof;
       bool mRebuild;
-      bool mReuseAltToys; 
+      bool mReuseAltToys;
+      bool mEnableDetOutput; 
       int     mNWorkers;
       int     mNToyToRebuild;
+      int     mRebuildParamValues; 
       int     mPrintLevel;
       int     mInitialFit; 
       int     mRandomSeed; 
@@ -160,10 +167,12 @@ RooStats::HypoTestInvTool::HypoTestInvTool() : mPlotHypoTestResult(true),
                                                mUseVectorStore(true),
                                                mGenerateBinned(false),
                                                mUseProof(false),
+                                               mEnableDetOutput(false),
                                                mRebuild(false),
                                                mReuseAltToys(false),
                                                mNWorkers(4),
                                                mNToyToRebuild(100),
+                                               mRebuildParamValues(0),
                                                mPrintLevel(0),
                                                mInitialFit(-1),
                                                mRandomSeed(-1),
@@ -191,6 +200,7 @@ RooStats::HypoTestInvTool::SetParameter(const char * name, bool value){
    if (s_name.find("UseVectorStore") != std::string::npos) mUseVectorStore = value;
    if (s_name.find("GenerateBinned") != std::string::npos) mGenerateBinned = value;
    if (s_name.find("UseProof") != std::string::npos) mUseProof = value;
+   if (s_name.find("EnableDetailedOutput") != std::string::npos) mEnableDetOutput = value;
    if (s_name.find("Rebuild") != std::string::npos) mRebuild = value;
    if (s_name.find("ReuseAltToys") != std::string::npos) mReuseAltToys = value;
 
@@ -209,6 +219,7 @@ RooStats::HypoTestInvTool::SetParameter(const char * name, int value){
 
    if (s_name.find("NWorkers") != std::string::npos) mNWorkers = value;
    if (s_name.find("NToyToRebuild") != std::string::npos) mNToyToRebuild = value;
+   if (s_name.find("RebuildParamValues") != std::string::npos) mRebuildParamValues = value;
    if (s_name.find("PrintLevel") != std::string::npos) mPrintLevel = value;
    if (s_name.find("InitialFit") != std::string::npos) mInitialFit = value;
    if (s_name.find("RandomSeed") != std::string::npos) mRandomSeed = value;
@@ -315,42 +326,38 @@ StandardHypoTestInvDemo(const char * infile = 0,
 
   
   
-   TString fileName(infile);
-   if (fileName.IsNull()) { 
-      fileName = "results/example_combined_GaussExample_model.root";
-      std::cout << "Use standard file generated with HistFactory : " << fileName << std::endl;
+   TString filename(infile);
+   if (filename.IsNull()) {
+      filename = "results/example_combined_GaussExample_model.root";
+      bool fileExist = !gSystem->AccessPathName(filename); // note opposite return code
+      // if file does not exists generate with histfactory
+      if (!fileExist) {
+#ifdef _WIN32
+         cout << "HistFactory file cannot be generated on Windows - exit" << endl;
+         return;
+#endif
+         // Normally this would be run on the command line
+         cout <<"will run standard hist2workspace example"<<endl;
+         gROOT->ProcessLine(".! prepareHistFactory .");
+         gROOT->ProcessLine(".! hist2workspace config/example.xml");
+         cout <<"\n\n---------------------"<<endl;
+         cout <<"Done creating example input"<<endl;
+         cout <<"---------------------\n\n"<<endl;
+      }
+      
    }
-  
-   // open file and check if input file exists
-   TFile * file = TFile::Open(fileName); 
-  
-   // if input file was specified but not found, quit
-   if(!file && !TString(infile).IsNull()){
-      cout <<"file " << fileName << " not found" << endl;
-      return;
-   } 
-  
-   // if default file not found, try to create it
+   else
+      filename = infile;
+   
+   // Try to open the file
+   TFile *file = TFile::Open(filename);
+   
+   // if input file was specified byt not found, quit
    if(!file ){
-      // Normally this would be run on the command line
-      cout <<"will run standard hist2workspace example"<<endl;
-      gROOT->ProcessLine(".! prepareHistFactory .");
-      gROOT->ProcessLine(".! hist2workspace config/example.xml");
-      cout <<"\n\n---------------------"<<endl;
-      cout <<"Done creating example input"<<endl;
-      cout <<"---------------------\n\n"<<endl;
-    
-      // now try to access the file again
-      file = TFile::Open(fileName);
-    
-   }
-  
-   if(!file){
-      // if it is still not there, then we can't continue
-      cout << "Not able to run hist2workspace to create example input" <<endl;
+      cout <<"StandardRooStatsDemoMacro: Input file " << filename << " is not found" << endl;
       return;
    }
-  
+
 
 
    HypoTestInvTool calc;
@@ -364,10 +371,12 @@ StandardHypoTestInvDemo(const char * infile = 0,
    calc.SetParameter("NToysRatio", nToysRatio);
    calc.SetParameter("MaxPOI", maxPOI);
    calc.SetParameter("UseProof", useProof);
+   calc.SetParameter("EnableDetailedOutput", enableDetailedOutput);
    calc.SetParameter("NWorkers", nworkers);
    calc.SetParameter("Rebuild", rebuild);
    calc.SetParameter("ReuseAltToys", reuseAltToys);
    calc.SetParameter("NToyToRebuild", nToyToRebuild);
+   calc.SetParameter("RebuildParamValues", rebuildParamValues);
    calc.SetParameter("MassValue", massValue.c_str());
    calc.SetParameter("MinimizerType", minimizerType.c_str());
    calc.SetParameter("PrintLevel", printLevel);
@@ -379,7 +388,7 @@ StandardHypoTestInvDemo(const char * infile = 0,
 
    RooWorkspace * w = dynamic_cast<RooWorkspace*>( file->Get(wsName) );
    HypoTestInverterResult * r = 0;  
-   std::cout << w << "\t" << fileName << std::endl;
+   std::cout << w << "\t" << filename << std::endl;
    if (w != NULL) {
       r = calc.RunInverter(w, modelSBName, modelBName,
                            dataName, calculatorType, testStatType, useCLs,
@@ -392,10 +401,10 @@ StandardHypoTestInvDemo(const char * infile = 0,
    }
    else { 
       // case workspace is not present look for the inverter result
-      std::cout << "Reading an HypoTestInverterResult with name " << wsName << " from file " << fileName << std::endl;
+      std::cout << "Reading an HypoTestInverterResult with name " << wsName << " from file " << filename << std::endl;
       r = dynamic_cast<HypoTestInverterResult*>( file->Get(wsName) ); //
       if (!r) { 
-         std::cerr << "File " << fileName << " does not contain a workspace or an HypoTestInverterResult - Exit " 
+         std::cerr << "File " << filename << " does not contain a workspace or an HypoTestInverterResult - Exit " 
                    << std::endl;
          file->ls();
          return; 
@@ -450,6 +459,13 @@ RooStats::HypoTestInvTool::AnalyzeResult( HypoTestInverterResult * r,
    std::cout << " expected limit (-2 sig) " << r->GetExpectedUpperLimit(-2) << std::endl;
    std::cout << " expected limit (+2 sig) " << r->GetExpectedUpperLimit(2) << std::endl;
   
+
+   // detailed output 
+   if (mEnableDetOutput) {
+      mWriteResult=true; 
+      Info("StandardHypoTestInvDemo","detailed output will be written in output result file"); 
+   }
+
   
    // write result in a file 
    if (r != NULL && mWriteResult) {
@@ -471,8 +487,21 @@ RooStats::HypoTestInvTool::AnalyzeResult( HypoTestInverterResult * r,
          mResultFileName += name;
       }
 
+      // get (if existing) rebuilt UL distribution
+      TString uldistFile = "RULDist.root";
+      TObject * ulDist = 0;
+      bool existULDist = !gSystem->AccessPathName(uldistFile);
+      if (existULDist) {
+         TFile * fileULDist = TFile::Open(uldistFile);
+         if (fileULDist) ulDist= fileULDist->Get("RULDist");
+      }
+
+
       TFile * fileOut = new TFile(mResultFileName,"RECREATE");
       r->Write();
+      if (ulDist) ulDist->Write(); 
+      Info("StandardHypoTestInvDemo","HypoTestInverterResult has been written in the file %s",mResultFileName.Data()); 
+
       fileOut->Close();                                                                     
    }   
   
@@ -521,6 +550,8 @@ RooStats::HypoTestInvTool::AnalyzeResult( HypoTestInverterResult * r,
          pl->Draw();
       }
    }
+
+
 }
 
 
@@ -640,7 +671,11 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
       }
    }
 
-
+   // save all initial parameters of the model including the global observables 
+   RooArgSet initialParameters; 
+   RooArgSet * allParams = sbModel->GetPdf()->getParameters(*data); 
+   allParams->snapshot(initialParameters);
+   delete allParams; 
   
    // run first a data fit 
   
@@ -717,6 +752,7 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
    RooArgSet altParams(*bModel->GetSnapshot());
    if (bModel->GetNuisanceParameters()) altParams.add(*bModel->GetNuisanceParameters());
    if (bModel->GetSnapshot()) slrts.SetAltParameters(altParams);
+   if (mEnableDetOutput) slrts.EnableDetailedOutput();
   
    // ratio of profile likelihood - need to pass snapshot for the alt
    RatioOfProfiledLikelihoodsTestStat 
@@ -725,12 +761,14 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
    if (testStatType == 11) ropl.SetSubtractMLE(true);
    ropl.SetPrintLevel(mPrintLevel);
    ropl.SetMinimizer(minimizerType.c_str());
+   if (mEnableDetOutput) ropl.EnableDetailedOutput();
   
    ProfileLikelihoodTestStat profll(*sbModel->GetPdf());
    if (testStatType == 3) profll.SetOneSided(true);
    if (testStatType == 4) profll.SetSigned(true);
    profll.SetMinimizer(minimizerType.c_str());
    profll.SetPrintLevel(mPrintLevel);
+   if (mEnableDetOutput) profll.EnableDetailedOutput();
 
    profll.SetReuseNLL(mOptimize);
    slrts.SetReuseNLL(mOptimize);
@@ -761,6 +799,7 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
       Error("StandardHypoTestInvDemo","Invalid - calculator type = %d supported values are only :\n\t\t\t 0 (Frequentist) , 1 (Hybrid) , 2 (Asymptotic) ",type);
       return 0;
    }
+
   
    // set the test statistic 
    TestStatistic * testStat = 0;
@@ -878,8 +917,11 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
       if (testStatType != 2 && testStatType != 3)  
          Warning("StandardHypoTestInvDemo","Only the PL test statistic can be used with AsymptoticCalculator - use by default a two-sided PL");
    }
-   else if (type == 0 || type == 1) 
+   else if (type == 0 || type == 1) { 
       ((FrequentistCalculator*) hc)->SetToys(ntoys,ntoys/mNToysRatio); 
+      // store also the fit information for each poi point used by calculator based on toys
+      if (mEnableDetOutput) ((FrequentistCalculator*) hc)->StoreFitInfo(true);
+   }
 
   
    // Get the result
@@ -888,14 +930,14 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
   
   
    HypoTestInverter calc(*hc);
-   calc.SetConfidenceLevel(0.95);
+   calc.SetConfidenceLevel(confidenceLevel);
   
   
    calc.UseCLs(useCLs);
    calc.SetVerbose(true);
   
    // can speed up using proof-lite
-   if (mUseProof && mNWorkers > 1) { 
+   if (mUseProof) { 
       ProofConfig pc(*w, mNWorkers, "", kFALSE);
       toymcs->SetProofConfig(&pc);    // enable proof
    }
@@ -919,8 +961,51 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
    HypoTestInverterResult * r = calc.GetInterval();
    std::cout << "Time to perform limit scan \n";
    tw.Print();
-  
+
    if (mRebuild) {
+
+      std::cout << "\n***************************************************************\n";
+      std::cout << "Rebuild the upper limit distribution by re-generating new set of pseudo-experiment and re-compute for each of them a new upper limit\n\n";
+
+         
+      allParams = sbModel->GetPdf()->getParameters(*data); 
+
+      // define on which value of nuisance parameters to do the rebuild
+      // default is best fit value for bmodel snapshot 
+
+
+
+      if (mRebuildParamValues != 0) { 
+         // set all parameters to their initial workspace values 
+         *allParams = initialParameters; 
+      }
+      if (mRebuildParamValues == 0 || mRebuildParamValues == 1 ) { 
+          RooArgSet constrainParams;
+          if (sbModel->GetNuisanceParameters() ) constrainParams.add(*sbModel->GetNuisanceParameters());
+          RooStats::RemoveConstantParameters(&constrainParams);
+          
+          const RooArgSet * poiModel = sbModel->GetParametersOfInterest(); 
+          bModel->LoadSnapshot(); 
+
+          // do a profile using the B model snapshot
+          if (mRebuildParamValues == 0 ) { 
+
+             RooStats::SetAllConstant(*poiModel,true);
+
+             sbModel->GetPdf()->fitTo(*data,InitialHesse(false), Hesse(false),
+                                   Minimizer(minimizerType.c_str(),"Migrad"), Strategy(0), PrintLevel(mPrintLevel), Constrain(constrainParams) );
+
+
+             std::cout << "rebuild using fitted parameter value for B-model snapshot" << std::endl;
+             constrainParams.Print("v");
+          
+             RooStats::SetAllConstant(*poiModel,false);
+          }
+      }
+      std::cout << "StandardHypoTestInvDemo: Initial parameters used for rebuilding: ";
+      RooStats::PrintListContent(*allParams, std::cout); 
+      delete allParams; 
+
       calc.SetCloseProof(1);
       tw.Start();
       SamplingDistribution * limDist = calc.GetUpperLimitDistribution(true,mNToyToRebuild);
@@ -928,9 +1013,27 @@ RooStats::HypoTestInvTool::RunInverter(RooWorkspace * w,
       tw.Print();
     
       if (limDist) { 
-         std::cout << "expected up limit " << limDist->InverseCDF(0.5) << " +/- " 
-                   << limDist->InverseCDF(0.16) << "  " 
-                   << limDist->InverseCDF(0.84) << "\n"; 
+         std::cout << "Expected limits after rebuild distribution " << std::endl;
+         std::cout << "expected upper limit  (median of limit distribution) " << limDist->InverseCDF(0.5) << std::endl; 
+         std::cout << "expected -1 sig limit (0.16% quantile of limit dist) " << limDist->InverseCDF(ROOT::Math::normal_cdf(-1)) << std::endl; 
+         std::cout << "expected +1 sig limit (0.84% quantile of limit dist) " << limDist->InverseCDF(ROOT::Math::normal_cdf(1)) << std::endl; 
+         std::cout << "expected -2 sig limit (.025% quantile of limit dist) " << limDist->InverseCDF(ROOT::Math::normal_cdf(-2)) << std::endl; 
+         std::cout << "expected +2 sig limit (.975% quantile of limit dist) " << limDist->InverseCDF(ROOT::Math::normal_cdf(2)) << std::endl; 
+
+         // Plot the upper limit distribution
+         SamplingDistPlot limPlot( (mNToyToRebuild < 200) ? 50 : 100); 
+         limPlot.AddSamplingDistribution(limDist); 
+         limPlot.GetTH1F()->SetStats(true); // display statistics
+         limPlot.SetLineColor(kBlue); 
+         new TCanvas("limPlot","Upper Limit Distribution");
+         limPlot.Draw(); 
+                  
+         /// save result in a file 
+         limDist->SetName("RULDist"); 
+         TFile * fileOut = new TFile("RULDist.root","RECREATE");
+         limDist->Write();
+         fileOut->Close();                                                                     
+
       
          //update r to a new updated result object containing the rebuilt expected p-values distributions
          // (it will not recompute the expected limit)

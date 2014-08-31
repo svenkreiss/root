@@ -175,10 +175,20 @@ namespace RooLinkedListImplDetails {
   void Pool::push_free_elem(RooLinkedListElem* el)
   {
     // find from which chunk el came
-    AddrMap::iterator ci = _addrmap.lower_bound(el);
-    if (ci == _addrmap.end()) return;
-    if (!_addrmap.empty() && _addrmap.begin() != ci && ci->first != el) --ci;
-    // ci should now point to the chunk which might contain el
+    AddrMap::iterator ci = _addrmap.end();
+    if (!_addrmap.empty()) {
+      ci = _addrmap.lower_bound(el);
+      if (ci == _addrmap.end()) {
+	// point beyond last element, so get last one
+	ci = (++_addrmap.rbegin()).base();
+      } else {
+	// valid ci, check if we need to decrement ci because el isn't the
+	// first element in the chunk
+	if (_addrmap.begin() != ci && ci->first != el) --ci;
+      }
+    }
+    // either empty addressmap, or ci should now point to the chunk which might
+    // contain el
     if (_addrmap.empty() || !ci->second->contains(el)) {
       // el is not in any chunk we know about, so just delete it
       delete el;
@@ -599,11 +609,12 @@ RooAbsArg* RooLinkedList::findArg(const RooAbsArg* arg) const
 {
   // Return pointer to object with given name in collection.
   // If no such object is found, return null pointer.
-
-  if (_htableName) {
-    return (RooAbsArg*) _htableName->findArg(arg) ;
-  }
-
+  
+  // WVE this will find the wrong entry if the name changed!
+  // if (_htableLink) {
+  //   return (RooAbsArg*) _htableLink->find(arg) ;
+  // }
+  
   RooLinkedListElem* ptr = _first ;
   while(ptr) {
     if (((RooAbsArg*)(ptr->_arg))->namePtr() == arg->namePtr()) {

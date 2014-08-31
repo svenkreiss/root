@@ -1,10 +1,10 @@
-// @(#)root/mathcore:$Id$
+// @(#)root/mathcore:$Id: 2fd203872f434b1e4e74933903abb3429494ea6f $
 // Authors: W. Brown, M. Fischler, L. Moneta    2005  
 
  /**********************************************************************
   *                                                                    *
-  * Copyright (c) 2005 , LCG ROOT MathLib Team 			       *
-  *                    & FNAL LCG ROOT Mathlib Team  		       *
+  * Copyright (c) 2005 , LCG ROOT MathLib Team                         *
+  *                    & FNAL LCG ROOT Mathlib Team                    *
   *                                                                    *
   *                                                                    *
   **********************************************************************/
@@ -57,7 +57,7 @@ public :
    /**
       Default constructor  with x=y=z=0 
    */
-   Cartesian3D() : fX(0), fY(0), fZ(0) {  }
+   Cartesian3D() : fX(0.0), fY(0.0), fZ(0.0) {  }
 
    /**
       Constructor from x,y,z coordinates
@@ -110,7 +110,7 @@ public :
    /**
       get internal data into 3 Scalar numbers
    */ 
-   void GetCoordinates(Scalar& xx, Scalar& yy, Scalar& zz) const {xx=fX; yy=fY; zz=fZ;}  				
+   void GetCoordinates(Scalar& xx, Scalar& yy, Scalar& zz) const {xx=fX; yy=fY; zz=fZ;}
 
    Scalar X()     const { return fX;}
    Scalar Y()     const { return fY;}

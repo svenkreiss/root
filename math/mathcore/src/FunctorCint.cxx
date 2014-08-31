@@ -39,14 +39,14 @@ public:
 
    //copy ctor (need for cloning)
    FunctorCintHandler(const FunctorCintHandler<Functor> & rhs) :
-      BaseFunc(),
+      ImplFunc(),
       fDim(rhs.fDim),
       fPtr(rhs.fPtr),
       fMethodCall(rhs.fMethodCall),
       fMethodCall2(0)
    {}
    FunctorCintHandler(const FunctorCintHandler<GradFunctor> & rhs) :
-      BaseFunc(),
+      IBaseFunctionMultiDim(), // added to fix warning on gcc4.2
       ImplFunc(),
       fDim(rhs.fDim),
       fPtr(rhs.fPtr),
@@ -54,14 +54,14 @@ public:
       fMethodCall2(rhs.fMethodCall2)
    {}
    FunctorCintHandler(const FunctorCintHandler<Functor1D> & rhs) :
-      BaseFunc(),
+      ImplFunc(),
       fDim(1),
       fPtr(rhs.fPtr),
       fMethodCall(rhs.fMethodCall),
       fMethodCall2(0)
    {}
    FunctorCintHandler(const FunctorCintHandler<GradFunctor1D> & rhs) :
-      BaseFunc(),
+      IBaseFunctionOneDim(), // added to fix warning on gcc4.2
       ImplFunc(),
       fDim(1),
       fPtr(rhs.fPtr),
@@ -69,8 +69,11 @@ public:
       fMethodCall2(rhs.fMethodCall2)
    {}
 
-   ~FunctorCintHandler() { //no op (keep pointer to TMethodCall)
+   virtual ~FunctorCintHandler() { //no op (keep pointer to TMethodCall)
    }
+
+   ImplFunc  * Copy() const {  return new FunctorCintHandler(*this);  }
+
    BaseFunc  * Clone() const {  return new FunctorCintHandler(*this);  }
 
    unsigned int NDim() const {
@@ -90,6 +93,8 @@ private:
    inline double DoDerivative (const double * x,unsigned int ipar ) const;
    inline double DoEval (const double * x) const;
 
+   // objects of this class are not meant for assignment
+   FunctorCintHandler<ParentFunctor>& operator=(const FunctorCintHandler<ParentFunctor>& rhs);
 
    mutable TMethodCall *fMethodCall; // pointer to method call
    mutable TMethodCall *fMethodCall2; // pointer to second method call (for deriv)

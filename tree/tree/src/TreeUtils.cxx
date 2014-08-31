@@ -36,11 +36,27 @@ void SkipEmptyLines(std::istream &input);
 void SkipWSCharacters(std::istream &input);
 bool NextCharacterIsEOL(std::istream &input);
 
-//Let's enforce/limit what can be a Tuple.
+//Enforce/limit what can be a Tuple.
 //Actually, at the moment you can only use
-//the fill function only for TNtuple/TNtupleD
+//the fill function for TNtuple/TNtupleD
 //(enforced by hidden definition and explicit instantiations).
 //But in future this can potentially change.
+
+//TODO: there is no line number in any of error messages.
+//It can be improved, though, we can have mixed line endings
+//so I can not rely on this numbering (for example, my vim shows these lines:
+//aaaa\r\r\nbbb as
+//aaaa
+//bbbb
+//Though it can be also treated as
+//aaaa
+//
+//bbb
+//or even as
+//aaaa
+//
+//
+//bbb - so line numbers can be useless and misleading.
 
 template<class> struct InvalidTupleType;
 
@@ -62,7 +78,7 @@ struct InvalidTupleType<TNtupleD>
 
 //_______________________________________________________________________
 template<class DataType, class Tuple>
-Long64_t FillNtupleFromStream(std::istream &inputStream, Tuple &tuple, char delimiter, bool relaxedMode)
+Long64_t FillNtupleFromStream(std::istream &inputStream, Tuple &tuple, char delimiter, bool strictMode)
 {
    InvalidTupleType<Tuple> typeChecker;
 
@@ -71,8 +87,13 @@ Long64_t FillNtupleFromStream(std::istream &inputStream, Tuple &tuple, char deli
       return 0;
    }
 
+   if (delimiter == '#') {
+      ::Error("FillNtuplesFromStream", "invalid delimiter, '#' symbols can only start a comment");
+      return 0;
+   }
+
    const Int_t nVars = tuple.GetNvar();
-   if (!nVars) {
+   if (nVars <= 0) {
       ::Error("FillNtupleFromStream", "invalid number of elements");
       return 0;
    }
@@ -82,7 +103,7 @@ Long64_t FillNtupleFromStream(std::istream &inputStream, Tuple &tuple, char deli
    
    Long64_t nLines = 0;
    
-   if (!relaxedMode) {
+   if (strictMode) {
       while (true) {
          //Skip empty-lines (containing only newlines, comments, whitespaces + newlines
          //and combinations).
@@ -98,7 +119,7 @@ Long64_t FillNtupleFromStream(std::istream &inputStream, Tuple &tuple, char deli
          for (Int_t i = 0; i < nVars; ++i) {
             SkipWSCharacters(inputStream);//skip all wses except newlines.
             if (!inputStream.good()) {
-               ::Error("FillNtupleFromStream", "failed to read a tuple (invalid line)");
+               ::Error("FillNtupleFromStream", "failed to read a tuple (not enough values found)");
                return nLines;
             }
 
@@ -127,14 +148,63 @@ Long64_t FillNtupleFromStream(std::istream &inputStream, Tuple &tuple, char deli
             }
          }
          
+         SkipWSCharacters(inputStream);
+         if (!NextCharacterIsEOL(inputStream)) {
+            ::Error("FillNtupleFromStream",
+                    "only whitespace and new line can follow the last number on the line");
+            return nLines;
+         }
+
          //Only God forgives :) Ugly but ...
          //for TNtuple it's protected :)
          static_cast<TTree &>(tuple).Fill();
          ++nLines;
       }
    } else {
-      //This was requested in JIRA: read values for a given row even if they are separated
-      //by newline-character.
+      Int_t i = 0;//how many values we found for a given tuple's entry.
+      while (true) {
+         //Skip empty lines, comments and whitespaces before
+         //the first 'non-ws' symbol:
+         //it can be a delimiter/a number (depends on a context) or an invalid symbol.
+         SkipEmptyLines(inputStream);
+         
+         if (!inputStream.good()) {
+            //No data to read, check what we read by this moment:
+            if (!nLines)
+               ::Error("FillNtupleFromStream", "no data read");
+            else if (i > 0)//we've read only a part of a row.
+               ::Error("FillNtupleFromStream", "unexpected character or eof found");
+            return nLines;
+         }
+         
+         if (i > 0 && !std::isspace(delimiter)) {
+            //The next one must be a delimiter.
+            const char test = inputStream.peek();
+            if (!inputStream.good() || test != delimiter) {
+               ::Error("FillNtupleFromStream", "delimiter expected (non-strict mode)");
+               return nLines;
+            }
+
+            inputStream.get();//skip the delimiter.
+            SkipEmptyLines(inputStream);//probably, read till eof.
+         }
+         
+         //Here must be a number.
+         inputStream>>args[i];
+            
+         if (!(inputStream.eof() && i + 1 == nVars) && !inputStream.good()){
+            ::Error("FillNtupleFromStream", "error while reading a value");
+            return nLines;
+         }
+            
+         if (i + 1 == nVars) {
+            //We god the row, can fill now and continue.
+            static_cast<TTree &>(tuple).Fill();
+            ++nLines;
+            i = 0;
+         } else
+            ++i;
+      }
    }
    
    return nLines;
